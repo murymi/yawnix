@@ -12,6 +12,8 @@
 #include <string.h>
 #include <stdio.h>
 #include "./strings.h"
+#include "./paging.h"
+#include "./utils.h"
 //#include <math.h>
 
 __attribute__((section(".rodata.multiboot")))
@@ -144,8 +146,15 @@ void main()
 {
     vga_init(0xb8000 + 0xC0000000);
 
+    //clear_page_drectory();
+
+    int a = 7;
+
+    map_kernel();
+
+
     vga_printf("Hello world\n");
-    
+
     while (1)
     {
         /* code */

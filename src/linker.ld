@@ -30,7 +30,6 @@ SECTIONS {
     }
     
    . += __higher_half_start;
-
     __kernel_higher_half_start = .;
 
     .text ALIGN (4K)

@@ -13,6 +13,7 @@ void uint_to_string(char *buf, unsigned long value) {
     uint32_t i = 0;
     if(value == 0) {
         buf[i] = '0';
+        buf[i+1] = 0;
         return;
     }
     while (value > 0)
@@ -34,6 +35,7 @@ void int_to_string(char *buf, long value) {
     }
     if(value == 0) {
         buf[i] = '0';
+        buf[i+1] = 0;
         return;
     }
     while (value > 0)
@@ -52,6 +54,7 @@ void uint_to_string_hex(char *buf, unsigned long value) {
     uint32_t i = 0;
     if(value == 0) {
         buf[i] = '0';
+        buf[i+1] = 0;
         return;
     }
     while (value > 0)
@@ -79,6 +82,7 @@ void int_to_string_hex(char *buf, long value) {
     }
     if(value == 0) {
         buf[i] = '0';
+        buf[i+1] = 0;
         return;
     }
     while (value > 0)

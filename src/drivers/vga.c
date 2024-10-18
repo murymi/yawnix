@@ -150,6 +150,19 @@ void vga_write(char *buf, unsigned int len) {
     }
 }
 
+/// @brief  `%i` signed int
+///
+///`%u` unsigned int
+///
+///`%h` signed int hex
+///
+///`%x` unsigned int hex
+///
+///`%s` char *
+///
+///`%c` character
+/// @param fmt 
+/// @param  
 void vga_printf(char *fmt, ...) {
     va_list args;
     va_start(args, fmt);
@@ -180,14 +193,14 @@ void vga_printf(char *fmt, ...) {
                 break;
             case 'h':
                 int hnumber = va_arg(args, int);
-                uint_to_string_hex(buf, hnumber);
+                int_to_string_hex(buf, hnumber);
                 vga_write(buf, strlen(buf));
                 i += 1;
                 /* code */
                 break;
             case 'x':
                 unsigned int xnumber = va_arg(args, unsigned int);
-                int_to_string_hex(buf, xnumber);
+                uint_to_string_hex(buf, xnumber);
                 vga_write(buf, strlen(buf));
                 i += 1;
                 /* code */

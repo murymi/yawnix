@@ -1,5 +1,6 @@
  #pragma once
 
+#include <stdint.h>
  /* CR3 — Contains the physical address of the base of the page directory and two flags (PCD
  and PWT). This register is also known as the page-directory base register (PDBR). Only
  the most-significant bits (less the lower 12 bits) of the base address are specified; the lower
@@ -63,6 +64,34 @@ static inline void write_cr3_boot(cr3_t new) {
         "mov %0, %%cr3"
         : : "r" (new)
     );
+}
+
+static inline void write_cr3(cr3_t new) {
+    asm volatile (
+        "mov %0, %%cr3"
+        : : "r" (new)
+    );
+}
+
+static inline cr3_t read_cr3() {
+    cr3_t result;
+    asm volatile (
+        "mov %%cr3, %0"
+        : "=r" (result)
+    );
+    return result;
+}
+
+static inline void cr3_set_page_directory_base(cr3_t *cr3, uint32_t pd) {
+    unsigned int *cr3cast = (unsigned int *)cr3;
+    cr3->page_directory_base = 0;
+    *cr3cast |= pd;
+}
+
+static inline uint32_t cr3_get_page_directory_base(cr3_t *cr3) {
+    unsigned int *cr3cast = (unsigned int *)cr3;
+    //*cr3cast |= pd;
+    return (*cr3cast >> 12) << 12;
 }
 
 
@@ -205,6 +234,23 @@ static inline cr0_t read_cr0_boot() {
 
 __attribute__((section(".boot.text")))
 static inline void write_cr0_boot(cr0_t new) {
+    asm volatile (
+        "mov %0, %%cr0"
+        : : "r" (new)
+    );
+}
+
+//inline cr3_t read_cr3();
+static inline cr0_t read_cr0() {
+    cr0_t result;
+    asm volatile (
+        "mov %%cr3, %0"
+        : "=r" (result)
+    );
+    return result;
+}
+
+static inline void write_cr0(cr0_t new) {
     asm volatile (
         "mov %0, %%cr0"
         : : "r" (new)
@@ -681,4 +727,151 @@ static inline void port_byte_out(unsigned short port, unsigned char data) {
     __asm__(
         "out %%al, %%dx" : :"a" (data), "d" (port)
     );
+}
+
+/// Format of Page-Directory and Page-Table Entries for 4-KByte Pages
+/// and 32-Bit Physical Addresses
+typedef struct {
+    /// **Present (P) flag, bit 0**
+    /// Indicates whether the page or page table being pointed to by the entry is
+    /// currently loaded in physical memory. When the flag is set, the page is in phys-
+    /// ical memory and address translation is carried out. When the flag is clear, the
+    /// page is not in memory and, if the processor attempts to access the page, it
+    /// generates a page-fault exception (#PF).
+    /// The processor does not set or clear this flag; it is up to the operating system or
+    /// executive to maintain the state of the flag.
+    /// If the processor generates a page-fault exception, the operating system gener-
+    /// ally needs to carry out the following operations:
+    /// - 1. Copy the page from disk storage into physical memory.
+    /// - 2.
+    ///  Load the page address into the page-table or page-directory entry and set
+    /// its present flag. Other flags, such as the dirty and accessed flags, may also
+    /// be set at this time.
+    /// - 3. Invalidate the current page-table entry in the TLB (see Section 3.12,
+    /// “Translation Lookaside Buffers (TLBs)”, for a discussion of TLBs and
+    /// how to invalidate them).
+    /// - 4. Return from the page-fault handler to restart the interrupted program (or
+    /// task).
+    unsigned int present: 1;
+    /// **Read/write (R/W) flag, bit 1**
+    /// Specifies the read-write privileges for a page or group of pages (in the case of
+    /// a page-directory entry that points to a page table). When this flag is clear, the
+    /// page is read only; when the flag is set, the page can be read and written into.
+    /// This flag interacts with the U/S flag and the WP flag in register CR0. See
+    /// Section 4.11, “Page-Level Protection”, and Table 4-3 for a detailed discussion
+    /// of the use of these flags.
+    unsigned int read_write: 1;
+    /// **User/supervisor (U/S) flag, bit 2**
+    /// Specifies the user-supervisor privileges for a page or group of pages (in the
+    /// case of a page-directory entry that points to a page table). When this flag is
+    /// clear, the page is assigned the supervisor privilege level; when the flag is set,
+    /// the page is assigned the user privilege level. This flag interacts with the R/W
+    /// flag and the WP flag in register CR0. See Section 4.11, “Page-Level Protec-
+    /// tion”, and Table 4-3 for a detail discussion of the use of these flags.
+    unsigned int sepervisor: 1;
+    /// **Page-level write-through (PWT) flag, bit 3**
+    /// Controls the write-through or write-back caching policy of individual pages or
+    /// page tables. When the PWT flag is set, write-through caching is enabled for the
+    /// associated page or page table; when the flag is clear, write-back caching is
+    /// enabled for the associated page or page table. The processor ignores this flag if
+    /// the CD (cache disable) flag in CR0 is set. See Section 10.5, “Cache Control”,
+    /// for more information about the use of this flag. See Section 2.5, “Control
+    /// Registers”, for a description of a companion PWT flag in control register CR3.
+    unsigned int page_level_write_through: 1;
+    /// **Page-level cache disable (PCD) flag, bit 4**
+    /// Controls the caching of individual pages or page tables. When the PCD flag is
+    /// set, caching of the associated page or page table is prevented; when the flag is
+    /// clear, the page or page table can be cached. This flag permits caching to be
+    /// disabled for pages that contain memory-mapped I/O ports or that do not
+    /// provide a performance benefit when cached. The processor ignores this flag
+    /// (assumes it is set) if the CD (cache disable) flag in CR0 is set. See Chapter 10,
+    /// Memory Cache Control, for more information about the use of this flag. See
+    /// Section 2.5, “Control Registers”, for a description of a companion PCD flag in
+    /// control register CR3.
+    unsigned int page_level_cache_disable: 1;
+    /// **Accessed (A) flag, bit 5**
+    /// Indicates whether a page or page table has been accessed (read from or written
+    /// to) when set. Memory management software typically clears this flag when a
+    /// page or page table is initially loaded into physical memory. The processor then
+    /// sets this flag the first time a page or page table is accessed.
+    ///
+    /// This flag is a “sticky” flag, meaning that once set, the processor does not
+    /// implicitly clear it. Only software can clear this flag. The accessed and dirty
+    /// flags are provided for use by memory management software to manage the
+    /// transfer of pages and page tables into and out of physical memory.
+    /// **NOTE:**
+    /// The accesses used by the processor to set this bit may or may not be
+    /// exposed to the processor’s Self-Modifying Code detection logic. If the
+    /// processor is executing code from the same memory area that is being used for
+    /// page table structures, the setting of the bit may or may not result in an imme-
+    /// diate change to the executing code stream.
+    unsigned int accessed: 1;
+    /// **Dirty (D) flag, bit 6**
+    /// Indicates whether a page has been written to when set. (This flag is not used in
+    /// page-directory entries that point to page tables.) Memory management soft-
+    /// ware typically clears this flag when a page is initially loaded into physical
+    /// memory. The processor then sets this flag the first time a page is accessed for
+    /// a write operation.
+    ///
+    /// This flag is “sticky,” meaning that once set, the processor does not implicitly
+    /// clear it. Only software can clear this flag. The dirty and accessed flags are
+    /// provided for use by memory management software to manage the transfer of
+    /// pages and page tables into and out of physical memory.
+    /// **NOTE:**
+    ///  The accesses used by the processor to set this bit may or may not be
+    /// exposed to the processor’s Self-Modifying Code detection logic. If the
+    /// processor is executing code from the same memory area that is being used for
+    /// page table structures, the setting of the bit may or may not result in an imme-
+    /// diate change to the executing code stream.
+    unsigned int dirty: 1;
+    /// **Page attribute table index (PAT) flag, bit 7 in page-table entries for 4-KByte pages and
+    /// bit 12 in page-directory entries for 4-MByte pages**
+    /// (Introduced in the Pentium III processor) — Selects PAT entry. For processors
+    /// that support the page attribute table (PAT), this flag is used along with the
+    /// PCD and PWT flags to select an entry in the PAT, which in turn selects the
+    /// memory type for the page (see Section 10.12, “Page Attribute Table (PAT)”).
+    /// For processors that do not support the PAT, this bit is reserved and should be
+    /// set to 0.
+    unsigned int page_attribute_table_index: 1;
+    /// **Global (G) flag, bit 8**
+    /// (Introduced in the Pentium Pro processor) — Indicates a global page when set.
+    /// When a page is marked global and the page global enable (PGE) flag in register
+    /// CR4 is set, the page-table or page-directory entry for the page is not invalidated
+    /// in the TLB when register CR3 is loaded or a task switch occurs. This flag is
+    /// provided to prevent frequently used pages (such as pages that contain kernel or
+    /// other operating system or executive code) from being flushed from the TLB.
+    /// Only software can set or clear this flag. For page-directory entries that point to
+    /// page tables, this flag is ignored and the global characteristics of a page are set
+    /// in the page-table entries. See Section 3.12, “Translation Lookaside Buffers
+    /// (TLBs)”, for more information about the use of this flag. (This bit is reserved
+    /// in Pentium and earlier IA-32 processors.)
+    unsigned int global: 1;
+
+    unsigned int available_bits: 3;
+
+    /// **Page base address**, bits 12 through 32
+    /// (Page-table entries for 4-KByte pages) — Specifies the physical address of the
+    /// first byte of a 4-KByte page. The bits in this field are interpreted as the 20 most-
+    /// significant bits of the physical address, which forces pages to be aligned on
+    /// 4-KByte boundaries.
+    unsigned int page_base_address: 20;
+}
+__attribute__((packed))
+__attribute__((aligned(4)))
+page_table_entry_t;
+
+static inline page_table_entry_t pte_zero() {
+    unsigned int tmp = 0;
+    return *(page_table_entry_t *)&tmp;
+}
+
+static inline void pte_set_page_base_address(page_table_entry_t * self, unsigned int address) {
+    unsigned int *tmp = (unsigned int *)self;
+    self->page_base_address = 0;
+    *tmp |= address;
+}
+
+static inline unsigned int pte_get_page_base_address(page_table_entry_t *self) {
+    unsigned int *tmp = (unsigned int *)self;
+    return (*tmp >> 12) << 12;
 }
