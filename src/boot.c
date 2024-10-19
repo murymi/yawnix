@@ -14,6 +14,8 @@
 #include "./strings.h"
 #include "./paging.h"
 #include "./utils.h"
+#include "./gdt.h"
+#include "./debug.h"
 //#include <math.h>
 
 __attribute__((section(".rodata.multiboot")))
@@ -145,6 +147,7 @@ __attribute__((naked)) void higher_half()
 void main()
 {
     vga_init(0xb8000 + 0xC0000000);
+    gdt_init();
 
     //clear_page_drectory();
 
@@ -153,7 +156,12 @@ void main()
     map_kernel();
 
 
-    vga_printf("Hello world\n");
+    //segment_selector_t j = tr_read();
+    //tr_write(j);
+
+    vga_printf("Hello world %u\n",sizeof(long long) );
+
+    panic("kanguura %u %u\n", 45, 60);
 
     while (1)
     {

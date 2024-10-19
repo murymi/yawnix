@@ -167,6 +167,12 @@ void vga_printf(char *fmt, ...) {
     va_list args;
     va_start(args, fmt);
 
+    vga_vprintf(fmt, args);
+
+    va_end(args);
+}
+
+void vga_vprintf(char *fmt, __gnuc_va_list args) {
     char buf[50] = {0};
 
     for(int i = 0;fmt[i]!=0; i++) {
@@ -228,6 +234,4 @@ void vga_printf(char *fmt, ...) {
             break;
         }
     }
-
-    va_end(args);
 }

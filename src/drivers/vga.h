@@ -1,5 +1,7 @@
 #pragma once
 
+#include<stdarg.h>
+
 #define VGA_SCREEN_CONTROL_REGISTER     0x3d4
 #define VGA_SCREEN_DATA_REGISTER        0x3d5
 #define VGA_HIGH_OFFSET                 0x0e
@@ -49,3 +51,4 @@ vga_pos_t vga_new_line(vga_pos_t old);
 void vga_write(char *buf, unsigned int len);
 void vga_printf(char *fmt, ...);
 void vga_write_char(char c);
+void vga_vprintf(char *fmt, __gnuc_va_list args);
