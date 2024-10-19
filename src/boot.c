@@ -147,13 +147,14 @@ __attribute__((naked)) void higher_half()
 void main()
 {
     vga_init(0xb8000 + 0xC0000000);
-    gdt_init();
+    gdt_init(((uint32_t)kernel_stack) + sizeof(kernel_stack));
+    
 
     //clear_page_drectory();
 
-    int a = 7;
+    //int a = 7;
 
-    map_kernel();
+    //map_kernel();
 
 
     //segment_selector_t j = tr_read();

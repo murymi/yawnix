@@ -225,7 +225,7 @@ __attribute__((section(".boot.text"))) static inline cr0_t read_cr0_boot()
 {
     cr0_t result;
     asm volatile(
-        "mov %%cr3, %0"
+        "mov %%cr0, %0"
         : "=r"(result));
     return result;
 }
@@ -242,7 +242,7 @@ static inline cr0_t read_cr0()
 {
     cr0_t result;
     asm volatile(
-        "mov %%cr3, %0"
+        "mov %%cr0, %0"
         : "=r"(result));
     return result;
 }
@@ -987,9 +987,9 @@ static inline char segment_type_system_toint(segment_type_system_t self)
     return *((char *)&self);
 }
 
-static inline segment_type_system_t segment_type_system_t_tss32available()
+static inline segment_type_system_t segment_type_system_tss32available()
 {
-    return (segment_type_system_t){.a = 1, .b = 1, .c = 0, .d = 1};
+    return (segment_type_system_t){.a = 1, .b = 0, .c = 0, .d = 1};
 }
 
 static inline segment_type_system_t segment_type_system_interrupt_gate32()
@@ -1368,13 +1368,71 @@ static inline pseudo_descriptor_t gdtr_read()
     return res;
 }
 
-static inline void gdtr_write(pseudo_descriptor_t pd)
+typedef enum
+{
+    gdt = 0,
+    ldt = 1
+} table_indicator_t;
+/// A segment selector is a 16-bit identifier for a segment (see Figure 3-6). It does not point directly
+/// to the segment, but instead points to the segment descriptor that defines the segment. A segment
+/// selector contains the following items:
+typedef struct
+{
+    /// **Requested Privilege Level (RPL)**
+    /// (Bits 0 and 1) — Specifies the privilege level of the selector. The privilege level
+    /// can range from 0 to 3, with 0 being the most privileged level. See Section 4.5,
+    /// “Privilege Levels”, for a description of the relationship of the RPL to the CPL
+    /// of the executing program (or task) and the descriptor privilege level (DPL) of
+    /// the descriptor the segment selector points to.
+    unsigned requested_privilege_level : 2;
+    /// **TI (table indicator) flag**
+    /// (Bit 2) — Specifies the descriptor table to use: clearing this flag selects the
+    /// GDT; setting this flag selects the current LDT.
+    unsigned int table_indicator : 1;
+    /// **Index**
+    /// (Bits 3 through 15) — Selects one of 8192 descriptors in the GDT or LDT. The
+    /// processor multiplies the index value by 8 (the number of bytes in a segment
+    /// descriptor) and adds the result to the base address of the GDT or LDT (from
+    /// the GDTR or LDTR register, respectively).
+    unsigned index : 13;
+}
+__attribute__((packed))
+segment_selector_t;
+
+static inline void gdtr_write(pseudo_descriptor_t pd, 
+segment_selector_t kdata, 
+segment_selector_t kcode)
 {
     asm volatile(
         "lgdt %0\n"
         :
         : "m" (pd)
-        : "memory");
+        : "memory"
+    );
+
+    asm volatile (
+        "mov %%esp, %%ebx\n"
+        "sub $6, %%esp\n"
+        "movw %0, 4(%%esp)\n"
+        "movl $mukwenjele, (%%esp)\n"
+        "ljmp *(%%esp)\n"
+        "mukwenjele:\n"
+        "add $6, %%esp\n"
+        :: 
+        "r" (kcode): "memory", "ebx"
+    );
+
+    asm volatile(
+        "movw %0, %%bx\n"
+        "movw %%bx, %%ds\n"
+        "movw %%bx, %%es\n"
+        "movw %%bx, %%fs\n"
+        "movw %%bx, %%gs\n"
+        "movw %%bx, %%ss\n"
+        :: 
+        "m" (kdata) : "memory", "ebx"
+    );
+
 }
 
 /// The LDTR register holds the 16-bit segment selector, base address (32 bits in protected mode;
@@ -1431,36 +1489,7 @@ static inline void idtr_write(pseudo_descriptor_t pd)
         : "m"(pd) : "memory");
 }
 
-typedef enum
-{
-    gdt = 0,
-    ldt = 1
-} table_indicator_t;
-/// A segment selector is a 16-bit identifier for a segment (see Figure 3-6). It does not point directly
-/// to the segment, but instead points to the segment descriptor that defines the segment. A segment
-/// selector contains the following items:
-typedef struct
-{
-    /// **Requested Privilege Level (RPL)**
-    /// (Bits 0 and 1) — Specifies the privilege level of the selector. The privilege level
-    /// can range from 0 to 3, with 0 being the most privileged level. See Section 4.5,
-    /// “Privilege Levels”, for a description of the relationship of the RPL to the CPL
-    /// of the executing program (or task) and the descriptor privilege level (DPL) of
-    /// the descriptor the segment selector points to.
-    unsigned requested_privilege_level : 2;
-    /// **TI (table indicator) flag**
-    /// (Bit 2) — Specifies the descriptor table to use: clearing this flag selects the
-    /// GDT; setting this flag selects the current LDT.
-    unsigned int table_indicator : 1;
-    /// **Index**
-    /// (Bits 3 through 15) — Selects one of 8192 descriptors in the GDT or LDT. The
-    /// processor multiplies the index value by 8 (the number of bytes in a segment
-    /// descriptor) and adds the result to the base address of the GDT or LDT (from
-    /// the GDTR or LDTR register, respectively).
-    unsigned index : 13;
-}
-__attribute__((packed))
-segment_selector_t;
+
 
 /// The task register holds the 16-bit segment selector, base address (32 bits in protected mode; 64
 /// bits in IA-32e mode), segment limit, and descriptor attributes for the TSS of the current task.
@@ -1515,3 +1544,97 @@ static inline void tr_write(segment_selector_t ss)
         "memory"
         );
 }
+
+
+/// The processor state information needed to restore a task is saved in a system segment called the
+/// task-state segment (TSS).
+typedef struct {
+    /// Previous task link field — Contains the segment selector for the TSS of the previous task
+    /// (updated on a task switch that was initiated by a call, interrupt, or exception). This field
+    /// (which is sometimes called the back link field) permits a task switch back to the previous
+    /// task by using the IRET instruction.
+    uint16_t previous_task_link;
+    uint16_t reserved0;
+
+    /// **Privilege level 0,stack pointer** — This stack pointer consist of a
+    /// logical address made up of the segment selector for the stack segment (SS0)
+    /// and an offset into the stack (ESP0). Note that the values in this field
+    /// is static for a particular task; whereas, the SS and ESP values will change if stack
+    /// switching occurs within the task.
+    uint32_t esp0;
+    segment_selector_t ss0;
+    uint16_t reserved1;
+    /// **Privilege level 1,stack pointer** — This stack pointer consist of a
+    /// logical address made up of the segment selector for the stack segment (SS1)
+    /// and an offset into the stack (ESP1). Note that the values in this field
+    /// is static for a particular task; whereas, the SS and ESP values will change if stack
+    /// switching occurs within the task.
+    uint32_t esp1;
+    segment_selector_t ss1;
+    uint16_t reserved2;
+    /// **Privilege level 2,stack pointer** — This stack pointer consist of a
+    /// logical address made up of the segment selector for the stack segment (SS2)
+    /// and an offset into the stack (ESP2). Note that the values in this field
+    /// is static for a particular task; whereas, the SS and ESP values will change if stack
+    /// switching occurs within the task.
+    uint32_t esp2;
+    segment_selector_t ss2;
+    uint16_t reserved3;
+
+    /// **CR3 control register field** — Contains the base physical address of the page directory to
+    /// be used by the task. Control register CR3 is also known as the page-directory base register
+    /// (PDBR).
+    cr3_t cr3;
+    /// EIP (instruction pointer) field — State of the EIP register prior to the task switch.
+    uint32_t eip;
+    /// EFLAGS register field — State of the EFAGS register prior to the task switch.
+    eflags_t eflags;
+
+    //General-purpose register fields — State of the EAX, ECX, EDX, EBX, ESP, EBP, ESI,
+    //and EDI registers prior to the task switch.
+    uint32_t eax;
+    uint32_t ecx;
+    uint32_t edx;
+    uint32_t ebx;
+    uint32_t esp;
+    uint32_t ebp;
+    uint32_t esi;
+    uint32_t edi;
+
+    //Segment selector fields — Segment selectors stored in the ES, CS, SS, DS, FS, and GS
+    //registers prior to the task switch.
+    segment_selector_t es;
+    uint16_t reserved4;
+
+    segment_selector_t cs;
+    uint16_t reserved5;
+
+    segment_selector_t ss;
+    uint16_t reserved6;
+
+    segment_selector_t ds;
+    uint16_t reserved7;
+
+    segment_selector_t fs;
+    uint16_t reserved8;
+
+    segment_selector_t gs;
+    uint16_t reserved9;
+    /// LDT segment selector field — Contains the segment selector for the task's LDT.
+    segment_selector_t ldt_segment_selector;
+    uint16_t reserved10;
+    /// **T (debug trap) flag (byte 100, bit 0)** — When set, the T flag causes the processor to raise
+    /// a debug exception when a task switch to this task occurs (see Section 15.3.1.5, “Task-
+    /// Switch Exception Condition”).
+    //T: bool = false,
+    uint16_t reserved11;
+    /// **I/O map base address field** — Contains a 16-bit offset from the base of the TSS to the I/O
+    /// permission bit map and interrupt redirection bitmap. When present, these maps are stored
+    /// in the TSS at higher addresses. The I/O map base address points to the beginning of the I/O
+    /// permission bit map and the end of the interrupt redirection bit map. See Chapter 13,
+    /// Input/Output, in the IA-32 Intel Architecture Software Developer’s Manual, Volume 1,
+    /// for more information about the I/O permission bit map. See Section 16.3, “Interrupt and
+    /// Exception Handling in Virtual-8086 Mode”, for a detailed description of the interrupt
+    /// redirection bit map.
+    uint16_t io_map_base_address;
+} task_state_segment_t;
