@@ -1399,28 +1399,25 @@ typedef struct
 __attribute__((packed))
 segment_selector_t;
 
-static inline void gdtr_write(pseudo_descriptor_t pd, 
-segment_selector_t kdata, 
-segment_selector_t kcode)
+static inline void gdtr_write(pseudo_descriptor_t pd,
+                              segment_selector_t kdata,
+                              segment_selector_t kcode)
 {
     asm volatile(
         "lgdt %0\n"
         :
-        : "m" (pd)
-        : "memory"
-    );
+        : "m"(pd)
+        : "memory");
 
-    asm volatile (
+    asm volatile(
         "mov %%esp, %%ebx\n"
         "sub $6, %%esp\n"
         "movw %0, 4(%%esp)\n"
         "movl $mukwenjele, (%%esp)\n"
         "ljmp *(%%esp)\n"
         "mukwenjele:\n"
-        "add $6, %%esp\n"
-        :: 
-        "r" (kcode): "memory", "ebx"
-    );
+        "add $6, %%esp\n" ::
+            "r"(kcode) : "memory", "ebx");
 
     asm volatile(
         "movw %0, %%bx\n"
@@ -1428,11 +1425,8 @@ segment_selector_t kcode)
         "movw %%bx, %%es\n"
         "movw %%bx, %%fs\n"
         "movw %%bx, %%gs\n"
-        "movw %%bx, %%ss\n"
-        :: 
-        "m" (kdata) : "memory", "ebx"
-    );
-
+        "movw %%bx, %%ss\n" ::
+            "m"(kdata) : "memory", "ebx");
 }
 
 /// The LDTR register holds the 16-bit segment selector, base address (32 bits in protected mode;
@@ -1462,7 +1456,7 @@ static inline void ldt_write(pseudo_descriptor_t pd)
     asm volatile(
         "lldt (%0)\n"
         :
-        : "m" (pd) : "memory");
+        : "m"(pd) : "memory");
 }
 
 /// The IDTR register holds the base address (32 bits in protected mode; 64 bits in IA-32e mode)
@@ -1488,8 +1482,6 @@ static inline void idtr_write(pseudo_descriptor_t pd)
         :
         : "m"(pd) : "memory");
 }
-
-
 
 /// The task register holds the 16-bit segment selector, base address (32 bits in protected mode; 64
 /// bits in IA-32e mode), segment limit, and descriptor attributes for the TSS of the current task.
@@ -1540,15 +1532,13 @@ static inline void tr_write(segment_selector_t ss)
     asm volatile(
         "ltr %0\n"
         :
-        : "r"(ss) : 
-        "memory"
-        );
+        : "r"(ss) : "memory");
 }
-
 
 /// The processor state information needed to restore a task is saved in a system segment called the
 /// task-state segment (TSS).
-typedef struct {
+typedef struct
+{
     /// Previous task link field — Contains the segment selector for the TSS of the previous task
     /// (updated on a task switch that was initiated by a call, interrupt, or exception). This field
     /// (which is sometimes called the back link field) permits a task switch back to the previous
@@ -1590,8 +1580,8 @@ typedef struct {
     /// EFLAGS register field — State of the EFAGS register prior to the task switch.
     eflags_t eflags;
 
-    //General-purpose register fields — State of the EAX, ECX, EDX, EBX, ESP, EBP, ESI,
-    //and EDI registers prior to the task switch.
+    // General-purpose register fields — State of the EAX, ECX, EDX, EBX, ESP, EBP, ESI,
+    // and EDI registers prior to the task switch.
     uint32_t eax;
     uint32_t ecx;
     uint32_t edx;
@@ -1601,8 +1591,8 @@ typedef struct {
     uint32_t esi;
     uint32_t edi;
 
-    //Segment selector fields — Segment selectors stored in the ES, CS, SS, DS, FS, and GS
-    //registers prior to the task switch.
+    // Segment selector fields — Segment selectors stored in the ES, CS, SS, DS, FS, and GS
+    // registers prior to the task switch.
     segment_selector_t es;
     uint16_t reserved4;
 
@@ -1626,7 +1616,7 @@ typedef struct {
     /// **T (debug trap) flag (byte 100, bit 0)** — When set, the T flag causes the processor to raise
     /// a debug exception when a task switch to this task occurs (see Section 15.3.1.5, “Task-
     /// Switch Exception Condition”).
-    //T: bool = false,
+    // T: bool = false,
     uint16_t reserved11;
     /// **I/O map base address field** — Contains a 16-bit offset from the base of the TSS to the I/O
     /// permission bit map and interrupt redirection bitmap. When present, these maps are stored
@@ -1639,7 +1629,109 @@ typedef struct {
     uint16_t io_map_base_address;
 } task_state_segment_t;
 
-
-static inline void io_wait() {
+static inline void io_wait()
+{
     port_byte_out(0x80, 0);
 }
+
+/// Interrupt and trap gates are very similar to call gates (see Section 4.8.3, “Call Gates”). They
+/// contain a far pointer (segment selector and offset) that the processor uses to transfer program
+/// execution to a handler procedure in an exception- or interrupt-handler code segment. These gates
+/// differ in the way the processor handles the IF flag in the EFLAGS register (see Section 5.12.1.2,
+/// “Flag Usage By Exception- or Interrupt-Handler Procedure”).
+typedef struct
+{
+    /// Offset to procedure entry point
+    unsigned int offset_low : 16;
+    /// Segment Selector for destination code segment
+    ///  The segment selector for the gate
+    /// points to a segment descriptor for an executable code segment in either the GDT or the current
+    /// LDT
+    segment_selector_t segment_selector;
+    unsigned int reserved0 : 5;
+    unsigned int b0 : 3;
+    unsigned int b1 : 3;
+    // 0b110,
+    unsigned int size : 1;
+    unsigned int b2 : 1;
+    unsigned int dpl : 2;
+    unsigned int present : 1;
+    unsigned int offset_high : 16;
+}
+__attribute__((packed))
+interrupt_gate_t;
+
+static inline interrupt_gate_t interrupt_gate_init(
+    uint32_t proc_entry_point,
+    segment_selector_t segment_selector,
+    uint8_t previlege)
+{
+    return (interrupt_gate_t){
+        .offset_low = proc_entry_point,
+        .segment_selector = segment_selector,
+        .dpl = previlege,
+        .offset_high = proc_entry_point >> 16,
+        .size = 1,
+        .present = 1,
+        .b0 = 0,
+        .b1 = 0b110,
+        .b2 = 0,
+        .reserved0 = 0,
+    };
+}
+
+static inline uint32_t interrupt_gate_get_offset(interrupt_gate_t *self)
+{
+    return (self->offset_high << 16) | self->offset_low;
+}
+
+static inline void interrupt_gate_set_offset(interrupt_gate_t *self, uint32_t value)
+{
+    self->offset_high = value >> 16;
+    self->offset_low = value;
+}
+
+typedef struct
+{
+    segment_selector_t selector;
+    unsigned int ass : 16;
+} __attribute__((packed))
+pushed_selector_t;
+
+typedef struct
+{
+    // Page directory
+    cr3_t cr3;
+
+    // Extra segments
+    pushed_selector_t gs;
+    pushed_selector_t fs;
+    pushed_selector_t es;
+    pushed_selector_t ds;
+
+    // Destination, source, base pointer
+    uint32_t edi;
+    uint32_t esi;
+    uint32_t ebp;
+    uint32_t esp;
+
+    // General registers
+    uint32_t ebx;
+    uint32_t edx;
+    uint32_t ecx;
+    uint32_t eax;
+
+    // Interrupt number and error code
+    uint32_t interrupt_number;
+
+    // defined
+    uint32_t error_code;
+    // if (std.mem.eql(u8, "#PF", interrupt.mnemonic)) PageFaultErrorCode else ErrorCode,
+    uint32_t eip;
+    pushed_selector_t cs;
+    // cs_high: u16,
+    eflags_t eflags;
+    // if privilege changes
+    uint32_t user_esp;
+    uint32_t user_ss;
+} cpu_context_t;

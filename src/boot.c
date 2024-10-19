@@ -17,6 +17,7 @@
 #include "./gdt.h"
 #include "./debug.h"
 #include "pic.h"
+#include "interrupt.h"
 //#include <math.h>
 
 __attribute__((section(".rodata.multiboot")))
@@ -151,7 +152,12 @@ void main()
     gdt_init(((uint32_t)kernel_stack) + sizeof(kernel_stack));
     pic_remap();
 
-    asm volatile("sti");
+    interrupts_init_isrs();
+
+    char *a = 0xdeadbebe;
+    (*a) = 'x';
+
+    //asm volatile("sti");
 
     //pic_clear_mask(1);
 
