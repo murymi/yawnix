@@ -16,6 +16,7 @@
 #include "./utils.h"
 #include "./gdt.h"
 #include "./debug.h"
+#include "pic.h"
 //#include <math.h>
 
 __attribute__((section(".rodata.multiboot")))
@@ -148,7 +149,11 @@ void main()
 {
     vga_init(0xb8000 + 0xC0000000);
     gdt_init(((uint32_t)kernel_stack) + sizeof(kernel_stack));
-    
+    pic_remap();
+
+    asm volatile("sti");
+
+    //pic_clear_mask(1);
 
     //clear_page_drectory();
 

@@ -1638,3 +1638,8 @@ typedef struct {
     /// redirection bit map.
     uint16_t io_map_base_address;
 } task_state_segment_t;
+
+
+static inline void io_wait() {
+    port_byte_out(0x80, 0);
+}
