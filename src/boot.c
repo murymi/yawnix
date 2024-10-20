@@ -18,6 +18,7 @@
 #include "./debug.h"
 #include "pic.h"
 #include "interrupt.h"
+#include "mem.h"
 //#include <math.h>
 
 __attribute__((section(".rodata.multiboot")))
@@ -44,11 +45,6 @@ _start()
         "jmp _start2");
 }
 
-__attribute__((section(".boot.text"))) char getChar()
-{
-    return 'K';
-}
-
 __attribute__((section(".boot.bss")))
 __attribute__((aligned(4096)))
 page_directory_entry_t boot_page_directory[1024];
@@ -71,6 +67,10 @@ __attribute__((section(".boot.data"))) extern char __kernel_higher_half_stop;
 
 __attribute__((section(".boot.text"))) void enable_boot_paging()
 {
+    uint32_t boot_payload;
+
+    asm volatile("mov %%ebx, %0\n":"=r" (boot_payload));
+
     unsigned int higher_half = 0xC0000000;
 
     unsigned int counter = higher_half;
@@ -122,6 +122,8 @@ __attribute__((section(".boot.text"))) void enable_boot_paging()
     cr0.paging = 1;
     write_cr0_boot(cr0);
 
+    asm volatile("mov %0, %%ebx\n"::"r" (boot_payload));
+
     asm volatile("jmp higher_half");
 
     while (1)
@@ -148,32 +150,29 @@ __attribute__((naked)) void higher_half()
 
 void main()
 {
+    multiboot_info_t *boot_payload;
+    asm volatile("mov %%ebx, %0\n":"=r" (boot_payload));
     vga_init(0xb8000 + 0xC0000000);
     gdt_init(((uint32_t)kernel_stack) + sizeof(kernel_stack));
     pic_remap();
 
+    uint32_t total_memory = boot_payload->mem_lower + boot_payload->mem_upper;
+
     interrupts_init_isrs();
 
-    char *a = 0xdeadbebe;
-    (*a) = 'x';
+    physical_mem_init(total_memory);
 
-    //asm volatile("sti");
+    map_kernel();
+    vga_clear_screen(black);
 
-    //pic_clear_mask(1);
+    char * block =  page_alloc_kernel_specific_physical(0xb8000);
+    //page_free(block, 0);
 
-    //clear_page_drectory();
+    vga_init(block);
 
-    //int a = 7;
+    vga_printf("Hello world %u\n", block);
 
-    //map_kernel();
-
-
-    //segment_selector_t j = tr_read();
-    //tr_write(j);
-
-    vga_printf("Hello world %u\n",sizeof(long long) );
-
-    panic("kanguura %u %u\n", 45, 60);
+    //panic("kanguura %u %u\n", 45, 60);
 
     while (1)
     {

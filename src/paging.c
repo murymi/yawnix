@@ -1,15 +1,28 @@
 #include "./paging.h"
 #include "./utils.h"
 #include "./drivers/vga.h"
+#include "interrupt.h"
+#include "debug.h"
+#include "bitset.h"
+#include "mem.h"
 
 extern char __kernel_higher_half_start;
 extern char __kernel_higher_half_stop;
 
-extern char __kernel_start;
-extern char __kernel_stop;
 
 
+uint32_t virtual_bitset[MAX_PAGES/32];
 
+
+uint32_t gpe_handler(cpu_context_t *context) {
+    panic("general protection violation\n");
+    return 0;
+}
+
+uint32_t page_fault_handler(cpu_context_t *context) {
+    panic("page fault occurred\n");
+    return 0;
+}
 
 __attribute__((aligned(4096)))
 page_directory_entry_4k_t page_directory[1024];
@@ -37,35 +50,39 @@ static void clear_page_drectory(){
         }
     }
 
-    //uint32_t page_table_base = &page_table;
+    for(uint32_t i = 0; i < (MAX_PAGES/32); i++) {
+        virtual_bitset[i] = 0;
+    }
 }
 
 void map_kernel() {
     clear_page_drectory();
-
     uint32_t kernel_base = align_backward((uint32_t)&__kernel_higher_half_start, BLOCK_SIZE);
     uint32_t kernel_top = align_forward((uint32_t) &__kernel_higher_half_stop, BLOCK_SIZE);
-    //uint32_t kernel_phybase = kernel_base - 0xC0000000;
-    //align_forward((uint32_t) &__kernel_start, BLOCK_SIZE);
 
-
-    //vga_printf("base 0x%x, top 0x%x\n", kernel_base, kernel_top);
-
-    for(;kernel_base < kernel_top; kernel_base += BLOCK_SIZE) {
-        linear_address_4k_t lad = *((linear_address_4k_t *)&kernel_base);
+    for(uint32_t i = kernel_base; i < kernel_top; i += BLOCK_SIZE) {
+        linear_address_4k_t lad = *((linear_address_4k_t *)&i);
         page_table_entry_t pte = pte_zero();
         pte.present = 1;
         pte.sepervisor = 1;
         pte.read_write = 1;
-        pte_set_page_base_address(&pte, kernel_base - 0xC0000000);
+        pte_set_page_base_address(&pte, i - 0xC0000000);
         page_table[lad.page_directory_entry][lad.page_table_entry] = pte;
-        //vga_printf("pde: %u, pte: %u, offset: %u offc: %u\n", 
-        //lad.page_directory_entry, lad.page_table_entry,
-        // kernel_base - 0xC0000000,
-        // pte_get_page_base_address(&page_table[lad.page_directory_entry][lad.page_table_entry])
-        //);
-        //break;
+
+        uint32_t page_index = i/BLOCK_SIZE;
+
+        assert(!bitset_isset(virtual_bitset, page_index), "page must be free");
+        bitset_set(virtual_bitset, page_index);
     }
+
+    for(uint32_t i = kernel_base; i < kernel_top; i += BLOCK_SIZE) {
+        uint32_t page_index = i/BLOCK_SIZE;
+        assert(bitset_isset(virtual_bitset, page_index), "alloc kernel page went wierld");
+    }
+
+    // NULL PTR
+    bitset_set(virtual_bitset, 0);
+    assert(bitset_isset(virtual_bitset, 0), "alloc null page went wierld");
 
     {
         // for vga
@@ -83,5 +100,76 @@ void map_kernel() {
     cr3_set_page_directory_base(&cr3, ((uint32_t)&page_directory) - 0xC0000000);
     write_cr3(cr3);
 
-    //vga_printf("base: %u dir base: %u\n", cr3_get_page_directory_base(&cr3), ((uint32_t)&page_directory) - 0xC0000000);
+    interrupt_handler_register(XPAGEFAULT, page_fault_handler);
+    interrupt_handler_register(XGENERAL_PROTECTION, gpe_handler);
+
+}
+
+static uint32_t page_alloc_kernel_inner() {
+    uint32_t first_kernel_page = 0xC0000000/BLOCK_SIZE;
+    for(uint32_t i = first_kernel_page; i < MAX_PAGES; i++) {
+        if(!bitset_isset(virtual_bitset, i)) {
+            bitset_set(virtual_bitset, i);
+            return i * BLOCK_SIZE;
+        }
+    }
+    return 0;
+}
+
+uint32_t page_alloc_kernel_random() {
+    uint32_t physical_block = physical_alloc_block();
+    assert(physical_block, "Physical memory alloc error");
+
+    uint32_t virtual_block = page_alloc_kernel_inner();
+    assert(virtual_block, "virtual memory alloc error");
+
+    linear_address_4k_t lad = *((linear_address_4k_t *)&virtual_block);
+    page_table_entry_t pte = pte_zero();
+    pte.present = 1;
+    pte.sepervisor = 1;
+    pte.read_write = 1;
+    pte_set_page_base_address(&pte, physical_block);
+    page_table[lad.page_directory_entry][lad.page_table_entry] = pte;
+    assert(pte_get_page_base_address(&pte) == physical_block, "base must be eq to physical");
+    return virtual_block;
+}
+
+/// @brief physical block must be unallocated
+/// @param physical_block 
+/// @return 
+uint32_t page_alloc_kernel_specific_physical(uint32_t physical_block) {
+    assert((physical_block%BLOCK_SIZE) == 0, "physical block must be aligned");
+    assert(physical_block, "Physical block must be unNULL");
+
+    uint32_t physical_block2 = physical_alloc_block_specific(physical_block);
+    assert(physical_block2 == physical_block, "blocks should be same");
+    uint32_t virtual_block = page_alloc_kernel_inner();
+    assert(virtual_block, "virtual memory alloc error");
+
+    linear_address_4k_t lad = *((linear_address_4k_t *)&virtual_block);
+    page_table_entry_t pte = pte_zero();
+    pte.present = 1;
+    pte.sepervisor = 1;
+    pte.read_write = 1;
+    pte_set_page_base_address(&pte, physical_block);
+    page_table[lad.page_directory_entry][lad.page_table_entry] = pte;
+    assert(pte_get_page_base_address(&pte) == physical_block2, "base must be eq to physical");
+    return virtual_block;
+}
+
+void page_free(uint32_t page_ptr, int free_physical) {
+    assert((page_ptr%BLOCK_SIZE) == 0, "page block must be aligned");
+    assert(page_ptr, "page block must be unNULL");
+    uint32_t block_idx = page_ptr/BLOCK_SIZE;
+    assert(bitset_isset(virtual_bitset, block_idx), "Page double free detected\n");
+    linear_address_4k_t lad = *((linear_address_4k_t *)&page_ptr);
+
+    if(free_physical){
+        page_table_entry_t entry = page_table[lad.page_directory_entry][lad.page_table_entry];
+        assert(*((uint32_t *)&entry), "PTE must be unNULL");
+        uint32_t physical_addr = pte_get_page_base_address(&entry);
+        physical_free_block(physical_addr);
+    }
+    page_table[lad.page_directory_entry][lad.page_table_entry] = pte_zero();
+    invalidate_page(page_ptr);
 }

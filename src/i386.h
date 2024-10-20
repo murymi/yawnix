@@ -1735,3 +1735,7 @@ typedef struct
     uint32_t user_esp;
     uint32_t user_ss;
 } cpu_context_t;
+
+static inline void invalidate_page(uint32_t page_ptr) {
+    asm volatile("invlpg (%0)"::"r" (page_ptr):"memory");
+}

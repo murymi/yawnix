@@ -1,8 +1,11 @@
 #include "interrupt.h"
 #include "vga.h"
 #include "debug.h"
+#include "pic.h"
 
 interrupt_gate_t interrupt_desc_table[256];
+
+interrupt_routine interrupt_handlers[256];
 
 stub_without_error_code(0)
 stub_without_error_code(1)
@@ -298,9 +301,26 @@ void interrupt_common_stub()
                  "iret\n" ::);
 }
 
+static uint32_t irq_handler(cpu_context_t *context) {
+    const uint32_t idx = context->interrupt_number - 32;
+    if(!pic_spurious(idx)) {
+        interrupt_routine handler = interrupt_handlers[context->interrupt_number];
+        if(!handler) panic("unhandled irq: %u\n", idx);
+        context = (cpu_context_t *)handler(context);
+        pic_write_eoi(idx);
+    }
+    return (uint32_t)context;
+}
+
+static uint32_t isr_handler(cpu_context_t *context) {
+    interrupt_routine handler = interrupt_handlers[context->interrupt_number];
+    if(!handler) panic("unhandled isr: %u\n", context->interrupt_number);
+    return handler(context);
+}
+
 unsigned int interrupt_handler(cpu_context_t *context) {
-    vga_printf("kwenda....%u\n", context->interrupt_number);
-    return (uint32_t) context;
+    if(context->interrupt_number >= 32) return irq_handler(context);
+    return isr_handler(context);
 }
 
 void interrupts_init_isrs() {
@@ -563,6 +583,9 @@ void interrupts_init_isrs() {
     interrupt_desc_table[254] = interrupt_gate_init((uint32_t)stub_254, selector, 0);
     interrupt_desc_table[255] = interrupt_gate_init((uint32_t)stub_255, selector, 0);
 
+
+    for(int i = 0; i < 256; i++) interrupt_handlers[i] = 0;
+
     pseudo_descriptor_t idtp = (pseudo_descriptor_t){
         .base = (uint32_t) &interrupt_desc_table,
         .limit = sizeof(interrupt_desc_table)-1
@@ -574,4 +597,9 @@ void interrupts_init_isrs() {
 
     assert(c.base == (uint32_t)&interrupt_desc_table, "idt base not set well");
     assert(c.limit == sizeof(interrupt_desc_table)-1, "idt limit not set well");
+}
+
+void interrupt_handler_register(uint32_t index, interrupt_routine handler) {
+    assert(index < 256, "handler index out of bounds");
+    interrupt_handlers[index] = handler;
 }
