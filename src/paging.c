@@ -208,7 +208,7 @@ uint32_t page_alloc_kernel_contigious(uint32_t size) {
     uint32_t first_page = 0;
     uint32_t first_kernel_page = 0xC0000000/BLOCK_SIZE;
     uint32_t counter = 0;
-    for(uint32_t i = first_kernel_page; i < MAX_PAGES, counter < npages; i++) {
+    for(uint32_t i = first_kernel_page; i < MAX_PAGES && counter < npages; i++) {
         if(bitset_isset(virtual_bitset, i)) {
             counter = 0; 
         } else {

@@ -19,6 +19,7 @@
 #include "pic.h"
 #include "interrupt.h"
 #include "mem.h"
+#include "heap.h"
 //#include <math.h>
 
 __attribute__((section(".rodata.multiboot")))
@@ -166,14 +167,18 @@ void main()
     vga_clear_screen(black);
 
 
-    uint32_t block =  
-    page_alloc_kernel_contigious(1);
-    vga_printf("block: %u\n", block);
-
+    heap_init();
     
     //page_free(block, 0);
 
-    
+    char *a = heap_alloc(5);
+
+    a[0] = 'M';
+    a[1] = 'U';
+    a[2] = '\n';
+    a[3] = 0;
+
+    vga_printf(a);
 
     //page_free(block, 0);
     //page_free(block, 0);
@@ -186,7 +191,7 @@ void main()
     //vga_init(block);
 
 
-    //panic("kanguura %u %u\n", 45, 60);
+    panic("kanguura\n");
 
     while (1)
     {
