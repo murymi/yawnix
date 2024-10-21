@@ -165,12 +165,26 @@ void main()
     map_kernel();
     vga_clear_screen(black);
 
-    char * block =  page_alloc_kernel_specific_physical(0xb8000);
+
+    uint32_t block =  
+    page_alloc_kernel_contigious(1);
+    vga_printf("block: %u\n", block);
+
+    
     //page_free(block, 0);
 
-    vga_init(block);
+    
 
-    vga_printf("Hello world %u\n", block);
+    //page_free(block, 0);
+    //page_free(block, 0);
+
+    //physical_free_block(block);
+    //physical_free_block(block);
+
+
+
+    //vga_init(block);
+
 
     //panic("kanguura %u %u\n", 45, 60);
 

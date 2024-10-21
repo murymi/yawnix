@@ -165,6 +165,10 @@ void page_free(uint32_t page_ptr, int free_physical) {
     linear_address_4k_t lad = *((linear_address_4k_t *)&page_ptr);
 
     if(free_physical){
+        uint8_t *ptr = (uint8_t *)page_ptr;
+        for(int i = 0; i < 4096; i++) {
+            ptr[i] = 0;
+        }
         page_table_entry_t entry = page_table[lad.page_directory_entry][lad.page_table_entry];
         assert(*((uint32_t *)&entry), "PTE must be unNULL");
         uint32_t physical_addr = pte_get_page_base_address(&entry);
@@ -172,4 +176,62 @@ void page_free(uint32_t page_ptr, int free_physical) {
     }
     page_table[lad.page_directory_entry][lad.page_table_entry] = pte_zero();
     invalidate_page(page_ptr);
+    bitset_clear(virtual_bitset, block_idx);
+}
+
+
+uint32_t page_alloc_kernel_specific_virtual(uint32_t virtual_block) {
+    uint32_t physical_block = physical_alloc_block();
+    assert(physical_block, "Physical memory alloc error");
+
+    assert(virtual_block, "virtual memory alloc error");
+    assert(virtual_block%BLOCK_SIZE == 0, "virtual block must be aligned");
+    uint32_t block_index = virtual_block/BLOCK_SIZE;
+    assert(!bitset_isset(virtual_bitset, block_index), "Block must be free");
+
+    linear_address_4k_t lad = *((linear_address_4k_t *)&virtual_block);
+    page_table_entry_t pte = pte_zero();
+    pte.present = 1;
+    pte.sepervisor = 1;
+    pte.read_write = 1;
+    pte_set_page_base_address(&pte, physical_block);
+    page_table[lad.page_directory_entry][lad.page_table_entry] = pte;
+    assert(pte_get_page_base_address(&pte) == physical_block, "base must be eq to physical");
+    bitset_set(virtual_bitset, block_index);
+    return virtual_block;
+}
+
+uint32_t page_alloc_kernel_contigious(uint32_t size) {
+    assert(size > 0, "page allocation size must be > zero");
+    uint32_t aligned_size  = align_forward(size, BLOCK_SIZE);
+    uint32_t npages = aligned_size/BLOCK_SIZE;
+    uint32_t first_page = 0;
+    uint32_t first_kernel_page = 0xC0000000/BLOCK_SIZE;
+    uint32_t counter = 0;
+    for(uint32_t i = first_kernel_page; i < MAX_PAGES, counter < npages; i++) {
+        if(bitset_isset(virtual_bitset, i)) {
+            counter = 0; 
+        } else {
+            if(counter == 0) {
+                first_page = i;
+            }
+            counter += 1;
+        }
+    }
+    if(counter != npages) return 0;
+    assert(first_page != 0, "first Page must not be null");
+
+    for(uint32_t i = 0; i < npages; i++) {
+        assert(!bitset_isset(virtual_bitset, first_page + i), "Contigious allocation failed because blocks are not free");
+    }
+
+    for(uint32_t i = 0; i < npages; i++) {
+        page_alloc_kernel_specific_virtual((first_page + i) * BLOCK_SIZE);
+    }
+
+    for(uint32_t i = 0; i < npages; i++) {
+        assert(bitset_isset(virtual_bitset, first_page + i), "Contigious allocation failed");
+    }
+
+    return first_page * BLOCK_SIZE;
 }
