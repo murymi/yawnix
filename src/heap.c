@@ -1,5 +1,6 @@
 #include "heap.h"
 #include "debug.h"
+#include<string.h>
 
 heap_t *heap = 0;
 
@@ -10,6 +11,19 @@ void heap_init()
     heap = (heap_t *)page_alloc_kernel_contigious(HEAP_SIZE);
     assert((uint32_t)heap > 0, "heap init failed");
     heap->block_count = 0;
+
+    char *tmp = (char *)heap;
+    tmp[4095] = 'a';
+    tmp[4096] = 'b';
+    tmp[4097] = 'c';
+    tmp[4098] = '\n';
+    tmp[4099] = 0;
+
+    assert(tmp[4095] == 'a' &&
+    tmp[4096] == 'b' &&
+    tmp[4097] == 'c' &&
+    tmp[4098] == '\n' &&
+    tmp[4099] == 0, "foolish test failed");
 }
 
 static int can_fit(uint32_t size)

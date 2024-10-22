@@ -164,6 +164,7 @@ void main()
     physical_mem_init(total_memory);
 
     map_kernel();
+
     vga_clear_screen(black);
 
 
@@ -171,24 +172,9 @@ void main()
     
     //page_free(block, 0);
 
-    char *a = heap_alloc(5);
+    mem_stats_t stats = mem_stats();
 
-    a[0] = 'M';
-    a[1] = 'U';
-    a[2] = '\n';
-    a[3] = 0;
-
-    vga_printf(a);
-
-    //page_free(block, 0);
-    //page_free(block, 0);
-
-    //physical_free_block(block);
-    //physical_free_block(block);
-
-
-
-    //vga_init(block);
+    vga_printf("TOTAL: %u USED: %u\n", stats.total, stats.used);
 
 
     panic("kanguura\n");

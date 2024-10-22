@@ -5,18 +5,21 @@
 
 uint32_t bitset_isset(uint32_t bitset[MAX_PAGES/32], uint32_t index){
     uint32_t box = index/32;
+    assert(index < MAX_PAGES/32, "BITSET index out of bounds");
     uint32_t bit = index % 32;
     return (bitset[box] & (1 << bit)) > 0;
 }
 
 void bitset_set(uint32_t bitset[MAX_PAGES/32], uint32_t index){
     uint32_t box = index/32;
+    assert(index < MAX_PAGES/32, "BITSET index out of bounds");
     uint32_t bit = index % 32;
     bitset[box] = bitset[box] | (1 << bit);
 }
 
 void bitset_clear(uint32_t bitset[MAX_PAGES/32], uint32_t index){
     uint32_t box = index/32;
+    assert(index < MAX_PAGES/32, "BITSET index out of bounds");
     uint32_t bit = index % 32;
     bitset[box] = bitset[box] & ~(1 << bit);
 }

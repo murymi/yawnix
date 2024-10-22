@@ -55,6 +55,26 @@ static void clear_page_drectory(){
     }
 }
 
+static void recover_page_tables() {
+    uint32_t kernel_top = align_forward((uint32_t) &__kernel_higher_half_stop, BLOCK_SIZE)/BLOCK_SIZE;
+    uint32_t kernel_base = align_backward((uint32_t)&__kernel_higher_half_start, BLOCK_SIZE)/BLOCK_SIZE;
+
+    uint32_t first_kernel_page = 0xC0000000;
+    linear_address_4k_t lad = *((linear_address_4k_t *)&first_kernel_page);
+
+    for(int i = 0; i < lad.page_directory_entry; i++) {
+        page_free((uint32_t)&page_table[i], 1);
+    }
+
+    if(kernel_base >= first_kernel_page/BLOCK_SIZE) {
+        assert(bitset_isset(virtual_bitset,kernel_base), "Kenel page should be set");
+    }
+    if(kernel_top >= first_kernel_page/BLOCK_SIZE) {
+        assert(bitset_isset(virtual_bitset,kernel_top-1), "Kenel page should be set");
+    }
+
+}
+
 void map_kernel() {
     clear_page_drectory();
     uint32_t kernel_base = align_backward((uint32_t)&__kernel_higher_half_start, BLOCK_SIZE);
@@ -94,7 +114,12 @@ void map_kernel() {
         pte.read_write = 1;
         pte_set_page_base_address(&pte, 0xb8000);
         page_table[lad.page_directory_entry][lad.page_table_entry] = pte;
+
+        bitset_set(virtual_bitset, buf/BLOCK_SIZE);
+        assert(bitset_isset(virtual_bitset, buf/BLOCK_SIZE), "alloc vga page went wierld");
     }
+
+    recover_page_tables();
 
     cr3_t cr3 = read_cr3();
     cr3_set_page_directory_base(&cr3, ((uint32_t)&page_directory) - 0xC0000000);
@@ -102,6 +127,8 @@ void map_kernel() {
 
     interrupt_handler_register(XPAGEFAULT, page_fault_handler);
     interrupt_handler_register(XGENERAL_PROTECTION, gpe_handler);
+
+    
 
 }
 

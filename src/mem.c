@@ -4,6 +4,7 @@
 #include "debug.h"
 
 uint32_t bitset[MAX_PAGES/32] = {0};
+uint32_t total_mem_size = 0;
 
 extern char __kernel_higher_half_start;
 extern char __kernel_higher_half_stop;
@@ -13,11 +14,17 @@ extern char __kernel_higher_half_stop;
 /// @param total_mem mem in kb
 void physical_mem_init(uint32_t total_mem) {
     uint32_t total_bytes = total_mem * 1024;
+    total_mem_size = total_bytes;
+    //vga_printf("TOTAL MEM: %u BITSIZE: %u\n", total_mem_size, MAX_PAGES/32);
     uint64_t high_offset = align_backward(total_bytes, 4096);
     bitsset_init(bitset, total_bytes);
     assert(bitset_isset(bitset, high_offset/BLOCK_SIZE), "unavailable mem not set");
     bitset_set(bitset, 0);
     assert(bitset_isset(bitset, 0), "null mem not set");
+
+    bitset_set(bitset, 0xb8000/BLOCK_SIZE);
+    assert(bitset_isset(bitset, 0xb8000/BLOCK_SIZE), "vga mem not set");
+
 
     uint32_t kphysical_start = align_backward((uint32_t)&__kernel_higher_half_start, BLOCK_SIZE) - 0xC0000000;
     uint32_t kphysical_stop = align_forward((uint32_t)&__kernel_higher_half_stop, BLOCK_SIZE) - 0xC0000000;
@@ -63,4 +70,14 @@ void physical_free_block(uint32_t block_ptr) {
     assert(block_index < MAX_PAGES, "attempt to free out of bound block");
     assert(bitset_isset(bitset, block_index), "block Double free detected");
     bitset_clear(bitset, block_index);
+}
+
+mem_stats_t mem_stats() {
+    mem_stats_t stats = {.total = total_mem_size , .used = 0};
+    uint32_t high_offset = align_backward(total_mem_size, BLOCK_SIZE)/BLOCK_SIZE;
+
+    for(uint32_t i = 0; i < high_offset; i++) {
+        if(bitset_isset(bitset, i)) stats.used += BLOCK_SIZE;
+    }
+    return stats;
 }

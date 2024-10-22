@@ -5,7 +5,7 @@
 
 //#define MAX_PAGES (1024L * 1024L * 1024L * 4L)/4096L
 
-#define MAX_PAGES UINT32_MAX/4096L
+#define MAX_PAGES (align_backward(UINT32_MAX, BLOCK_SIZE)/4096L)-1
 
 
 //#define BLOCK_SIZE 4096L
