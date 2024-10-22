@@ -1,9 +1,10 @@
 #include "heap.h"
 #include "debug.h"
 #include<string.h>
+#include "mutex.h"
 
 heap_t *heap = 0;
-
+mutex_t heap_mutex;
 
 void heap_init()
 {
@@ -24,6 +25,7 @@ void heap_init()
     tmp[4097] == 'c' &&
     tmp[4098] == '\n' &&
     tmp[4099] == 0, "foolish test failed");
+    heap_mutex = mutex_init();
 }
 
 static int can_fit(uint32_t size)
@@ -150,8 +152,8 @@ static void *split_existing_block(block_t *block, uint32_t size) {
 
 void *heap_alloc(uint32_t size)
 {
+    mutex_lock(&heap_mutex);
     size += sizeof(block_footer_t);
-
     char *tmp;
     block_t *block;
     block_footer_t *footer;
@@ -170,10 +172,13 @@ void *heap_alloc(uint32_t size)
             footer = (block_footer_t*)(tmp + (block->size - sizeof(block_footer_t)));
             footer->magic = 69;
             block->magic = 69;
+            mutex_unlock(&heap_mutex);
             return tmp;
         }
-        else
+        else{
+            mutex_unlock(&heap_mutex);
             return 0;
+        }
     }
 
     block_t *fitting_block = find_free_fitting_block(size);
@@ -191,10 +196,12 @@ void *heap_alloc(uint32_t size)
         footer->magic = 69;
         block->magic = 69;
     }
+    
+    mutex_unlock(&heap_mutex);
     return tmp;
 }
 
-void heap_free(void *ptr)
+static void heap_free_inner(void *ptr)
 {
     assert((uint32_t)ptr, "attempt free ptr null");
     block_t *block = block_ushift(ptr);
@@ -215,7 +222,14 @@ void heap_free(void *ptr)
     assert(0, "freeing invalid pointer detected");
 }
 
+void heap_free(void *ptr) {
+    mutex_lock(&heap_mutex);
+    heap_free_inner(ptr);
+    mutex_unlock(&heap_mutex);
+}
+
 void *heap_realloc(void *ptr, uint32_t new_size) {
+    mutex_lock(&heap_mutex);
     block_t *tmp = heap_shift(heap);
     block_t *block = block_ushift(ptr);
 
@@ -234,7 +248,8 @@ void *heap_realloc(void *ptr, uint32_t new_size) {
                 for(uint32_t i = 0; i < block->size && i < new_size; i++) {
                     newptr[i] = oldptr[i];
                 }
-                heap_free(oldptr);
+                heap_free_inner(oldptr);
+                mutex_unlock(&heap_mutex);
                 return newptr;
             }
         }

@@ -20,6 +20,7 @@
 #include "interrupt.h"
 #include "mem.h"
 #include "heap.h"
+#include "mutex.h"
 //#include <math.h>
 
 __attribute__((section(".rodata.multiboot")))
@@ -175,9 +176,22 @@ void main()
     mem_stats_t stats = mem_stats();
 
     vga_printf("TOTAL: %u USED: %u\n", stats.total, stats.used);
+    vga_printf("%u\n", 30);
+
+    int i = 0;
+
+    //int a = compare_and_swap(&i, 0, 1);
+    //a = compare_and_swap(&i, 0, 1);
+    //a = compare_and_swap(&i, 0, 1);
+
+    mutex_t m = mutex_init();
+    mutex_lock(&m);
+    mutex_unlock(&m);
+    mutex_lock(&m);
 
 
-    panic("kanguura\n");
+
+    panic("kanguura %i\n", m.ass);
 
     while (1)
     {

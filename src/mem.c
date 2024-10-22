@@ -2,9 +2,11 @@
 #include "vga.h"
 #include "utils.h"
 #include "debug.h"
+#include "mutex.h"
 
 uint32_t bitset[MAX_PAGES/32] = {0};
 uint32_t total_mem_size = 0;
+mutex_t phys_mutex;
 
 extern char __kernel_higher_half_start;
 extern char __kernel_higher_half_stop;
@@ -39,45 +41,56 @@ void physical_mem_init(uint32_t total_mem) {
 
     assert(!bitset_isset(bitset, kphysical_start/BLOCK_SIZE-1), "alloc block failed");
     assert(!bitset_isset(bitset, kphysical_stop/BLOCK_SIZE + 1), "alloc block failed");
+    phys_mutex = mutex_init();
 }
 
 
 uint32_t physical_alloc_block() {
+    mutex_lock(&phys_mutex);
     for(uint32_t i = 0; i < MAX_PAGES; i++) {
         if(!bitset_isset(bitset, i)) {
             bitset_set(bitset, i);
+            mutex_unlock(&phys_mutex);
             return i * BLOCK_SIZE;
         }
     }
+    mutex_unlock(&phys_mutex);
     return 0;
 }
 
 uint32_t physical_alloc_block_specific(uint32_t block_ptr) {
+    mutex_lock(&phys_mutex);
     assert((block_ptr % BLOCK_SIZE) == 0, "attempt to alloc unaligned block");
     uint32_t block_index = block_ptr/BLOCK_SIZE;
     assert(block_index < MAX_PAGES, "attempt to alloc out of bound block");
     if(!bitset_isset(bitset, block_index)) {
         bitset_set(bitset, block_index);
         assert((block_index*BLOCK_SIZE) == block_ptr, "skill issue detected alloc block spec");
+        mutex_unlock(&phys_mutex);
         return block_ptr;
     }
+    mutex_unlock(&phys_mutex);
     return 0;
 }
 
 void physical_free_block(uint32_t block_ptr) {
+    mutex_lock(&phys_mutex);
     assert((block_ptr % BLOCK_SIZE) == 0, "attempt to free unaligned block");
     uint32_t block_index = block_ptr/BLOCK_SIZE;
     assert(block_index < MAX_PAGES, "attempt to free out of bound block");
     assert(bitset_isset(bitset, block_index), "block Double free detected");
     bitset_clear(bitset, block_index);
+    mutex_unlock(&phys_mutex);
 }
 
 mem_stats_t mem_stats() {
+    mutex_lock(&phys_mutex);
     mem_stats_t stats = {.total = total_mem_size , .used = 0};
     uint32_t high_offset = align_backward(total_mem_size, BLOCK_SIZE)/BLOCK_SIZE;
 
     for(uint32_t i = 0; i < high_offset; i++) {
         if(bitset_isset(bitset, i)) stats.used += BLOCK_SIZE;
     }
+    mutex_unlock(&phys_mutex);
     return stats;
 }

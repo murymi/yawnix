@@ -5,6 +5,7 @@
 #include "debug.h"
 #include "bitset.h"
 #include "mem.h"
+#include "mutex.h"
 
 extern char __kernel_higher_half_start;
 extern char __kernel_higher_half_stop;
@@ -12,7 +13,7 @@ extern char __kernel_higher_half_stop;
 
 
 uint32_t virtual_bitset[MAX_PAGES/32];
-
+mutex_t virtual_mutex;
 
 uint32_t gpe_handler(cpu_context_t *context) {
     panic("general protection violation\n");
@@ -119,6 +120,7 @@ void map_kernel() {
         assert(bitset_isset(virtual_bitset, buf/BLOCK_SIZE), "alloc vga page went wierld");
     }
 
+    virtual_mutex = mutex_init();
     recover_page_tables();
 
     cr3_t cr3 = read_cr3();
@@ -127,8 +129,6 @@ void map_kernel() {
 
     interrupt_handler_register(XPAGEFAULT, page_fault_handler);
     interrupt_handler_register(XGENERAL_PROTECTION, gpe_handler);
-
-    
 
 }
 
@@ -144,6 +144,7 @@ static uint32_t page_alloc_kernel_inner() {
 }
 
 uint32_t page_alloc_kernel_random() {
+    mutex_lock(&virtual_mutex);
     uint32_t physical_block = physical_alloc_block();
     assert(physical_block, "Physical memory alloc error");
 
@@ -158,6 +159,7 @@ uint32_t page_alloc_kernel_random() {
     pte_set_page_base_address(&pte, physical_block);
     page_table[lad.page_directory_entry][lad.page_table_entry] = pte;
     assert(pte_get_page_base_address(&pte) == physical_block, "base must be eq to physical");
+    mutex_unlock(&virtual_mutex);
     return virtual_block;
 }
 
@@ -165,6 +167,7 @@ uint32_t page_alloc_kernel_random() {
 /// @param physical_block 
 /// @return 
 uint32_t page_alloc_kernel_specific_physical(uint32_t physical_block) {
+    mutex_lock(&virtual_mutex);
     assert((physical_block%BLOCK_SIZE) == 0, "physical block must be aligned");
     assert(physical_block, "Physical block must be unNULL");
 
@@ -181,10 +184,12 @@ uint32_t page_alloc_kernel_specific_physical(uint32_t physical_block) {
     pte_set_page_base_address(&pte, physical_block);
     page_table[lad.page_directory_entry][lad.page_table_entry] = pte;
     assert(pte_get_page_base_address(&pte) == physical_block2, "base must be eq to physical");
+    mutex_unlock(&virtual_mutex);
     return virtual_block;
 }
 
 void page_free(uint32_t page_ptr, int free_physical) {
+    mutex_lock(&virtual_mutex);
     assert((page_ptr%BLOCK_SIZE) == 0, "page block must be aligned");
     assert(page_ptr, "page block must be unNULL");
     uint32_t block_idx = page_ptr/BLOCK_SIZE;
@@ -204,10 +209,12 @@ void page_free(uint32_t page_ptr, int free_physical) {
     page_table[lad.page_directory_entry][lad.page_table_entry] = pte_zero();
     invalidate_page(page_ptr);
     bitset_clear(virtual_bitset, block_idx);
+    mutex_unlock(&virtual_mutex);
 }
 
 
-uint32_t page_alloc_kernel_specific_virtual(uint32_t virtual_block) {
+uint32_t page_alloc_kernel_specific_virtual(uint32_t virtual_block, int lock) {
+    if(lock) mutex_lock(&virtual_mutex);
     uint32_t physical_block = physical_alloc_block();
     assert(physical_block, "Physical memory alloc error");
 
@@ -225,11 +232,13 @@ uint32_t page_alloc_kernel_specific_virtual(uint32_t virtual_block) {
     page_table[lad.page_directory_entry][lad.page_table_entry] = pte;
     assert(pte_get_page_base_address(&pte) == physical_block, "base must be eq to physical");
     bitset_set(virtual_bitset, block_index);
+    if(lock) mutex_unlock(&virtual_mutex);
     return virtual_block;
 }
 
 uint32_t page_alloc_kernel_contigious(uint32_t size) {
     assert(size > 0, "page allocation size must be > zero");
+    mutex_lock(&virtual_mutex);
     uint32_t aligned_size  = align_forward(size, BLOCK_SIZE);
     uint32_t npages = aligned_size/BLOCK_SIZE;
     uint32_t first_page = 0;
@@ -245,7 +254,10 @@ uint32_t page_alloc_kernel_contigious(uint32_t size) {
             counter += 1;
         }
     }
-    if(counter != npages) return 0;
+    if(counter != npages) { 
+        mutex_unlock(&virtual_mutex);
+        return 0;
+    }
     assert(first_page != 0, "first Page must not be null");
 
     for(uint32_t i = 0; i < npages; i++) {
@@ -253,12 +265,12 @@ uint32_t page_alloc_kernel_contigious(uint32_t size) {
     }
 
     for(uint32_t i = 0; i < npages; i++) {
-        page_alloc_kernel_specific_virtual((first_page + i) * BLOCK_SIZE);
+        page_alloc_kernel_specific_virtual((first_page + i) * BLOCK_SIZE, 0);
     }
 
     for(uint32_t i = 0; i < npages; i++) {
         assert(bitset_isset(virtual_bitset, first_page + i), "Contigious allocation failed");
     }
-
+    mutex_unlock(&virtual_mutex);
     return first_page * BLOCK_SIZE;
 }

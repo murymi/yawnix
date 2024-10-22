@@ -1739,3 +1739,20 @@ typedef struct
 static inline void invalidate_page(uint32_t page_ptr) {
     asm volatile("invlpg (%0)"::"r" (page_ptr):"memory");
 }
+
+/// @brief returns old value
+/// @param ass 
+/// @param expected 
+/// @param new_value 
+/// @return 
+static inline int compare_and_swap(uint32_t *ass, uint32_t expected, uint32_t new_value) {
+    asm volatile(
+        "lock cmpxchg %2, %0\n" 
+        :
+        "+m" (*ass),
+        "+a" (expected)
+        : "r" (new_value)
+        : "memory"
+    );
+    return expected;
+}

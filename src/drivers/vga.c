@@ -6,6 +6,7 @@
 #include<string.h>
 
 volatile vga_cell_t *frame_buffer[25];
+mutex_t vga_mutex;
 
 void vga_init(unsigned int address)
 {
@@ -16,6 +17,7 @@ void vga_init(unsigned int address)
         counter += 80;
     }
     vga_clear_screen(black);
+    vga_mutex = mutex_init();
 }
 
 vga_cell_t vga_cell_init(unsigned char c, vga_color_t fg, vga_color_t bg)
@@ -166,13 +168,12 @@ void vga_write(char *buf, unsigned int len) {
 void vga_printf(char *fmt, ...) {
     va_list args;
     va_start(args, fmt);
-
     vga_vprintf(fmt, args);
-
     va_end(args);
 }
 
 void vga_vprintf(char *fmt, __gnuc_va_list args) {
+    mutex_lock(&vga_mutex);
     char buf[50] = {0};
 
     for(int i = 0;fmt[i]!=0; i++) {
@@ -234,4 +235,5 @@ void vga_vprintf(char *fmt, __gnuc_va_list args) {
             break;
         }
     }
+    mutex_unlock(&vga_mutex);
 }

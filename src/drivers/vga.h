@@ -1,6 +1,7 @@
 #pragma once
 
 #include<stdarg.h>
+#include "mutex.h"
 
 #define VGA_SCREEN_CONTROL_REGISTER     0x3d4
 #define VGA_SCREEN_DATA_REGISTER        0x3d5
