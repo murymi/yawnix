@@ -21,6 +21,7 @@
 #include "mem.h"
 #include "heap.h"
 #include "mutex.h"
+#include "sched.h"
 //#include <math.h>
 
 __attribute__((section(".rodata.multiboot")))
@@ -150,12 +151,22 @@ __attribute__((naked)) void higher_half()
     }
 }
 
+static void fun_entry() {
+    vga_printf("I am process 2\n");
+    while (1)
+    {
+        asm volatile("hlt");
+    }
+    
+}
+
 void main()
 {
     multiboot_info_t *boot_payload;
     asm volatile("mov %%ebx, %0\n":"=r" (boot_payload));
     vga_init(0xb8000 + 0xC0000000);
     gdt_init(((uint32_t)kernel_stack) + sizeof(kernel_stack));
+    //gdt_init(70);
     pic_remap();
 
     uint32_t total_memory = boot_payload->mem_lower + boot_payload->mem_upper;
@@ -175,23 +186,24 @@ void main()
 
     mem_stats_t stats = mem_stats();
 
-    vga_printf("TOTAL: %u USED: %u\n", stats.total, stats.used);
-    vga_printf("%u\n", 30);
+    enable_interrupts();
 
-    int i = 0;
+    char *new_stack = page_alloc_kernel_contigious(4096 * 4);
+    assert(new_stack, "Failed to alloc new stack");
 
-    //int a = compare_and_swap(&i, 0, 1);
-    //a = compare_and_swap(&i, 0, 1);
-    //a = compare_and_swap(&i, 0, 1);
+    sched_init(new_stack + (4096 * 4));
+    
+    process_t proc2;
+    char *proc2_stack = page_alloc_kernel_random();
+    assert(new_stack, "Failed to alloc new stack");
+    process_init(&proc2, proc2_stack + 4096, (uint32_t)fun_entry);
+    sched_append_process(&proc2);
 
-    mutex_t m = mutex_init();
-    mutex_lock(&m);
-    mutex_unlock(&m);
-    mutex_lock(&m);
+    pic_clear_mask(0);
 
 
 
-    panic("kanguura %i\n", m.ass);
+    panic("kanguura");
 
     while (1)
     {

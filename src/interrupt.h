@@ -37,3 +37,6 @@ void interrupt_handler_register(uint32_t index, interrupt_routine handler);
 #define XSTACK_SEGMENT_FAULT 12
 #define XGENERAL_PROTECTION 13
 #define XPAGEFAULT 14
+
+void enable_interrupts();
+void disable_interrupts();

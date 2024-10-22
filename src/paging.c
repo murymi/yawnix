@@ -127,6 +127,10 @@ void map_kernel() {
     cr3_set_page_directory_base(&cr3, ((uint32_t)&page_directory) - 0xC0000000);
     write_cr3(cr3);
 
+    cr3_t new_cr3 = read_cr3();
+
+    assert(*((uint32_t*)&new_cr3) == (uint32_t)&page_directory - 0xC0000000, "page directory set error");
+
     interrupt_handler_register(XPAGEFAULT, page_fault_handler);
     interrupt_handler_register(XGENERAL_PROTECTION, gpe_handler);
 

@@ -603,3 +603,13 @@ void interrupt_handler_register(uint32_t index, interrupt_routine handler) {
     assert(index < 256, "handler index out of bounds");
     interrupt_handlers[index] = handler;
 }
+
+
+
+void enable_interrupts() {
+    asm volatile("sti");
+}
+
+void disable_interrupts() {
+    asm volatile("cli");
+}
