@@ -215,7 +215,7 @@ void vga_vprintf(char *fmt, __gnuc_va_list args) {
                 /* code */
                 break;
             case 'c':
-                char cnumber = (char)va_arg(args, int);
+                char cnumber = (unsigned char)va_arg(args, char);
                 vga_write_char(cnumber);
                 i += 1;
                 /* code */

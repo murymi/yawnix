@@ -57,7 +57,7 @@ static uint32_t save_context(uint32_t *stack, cpu_context_t *context) {
 }
 
 
-
+// return physical address
 uint32_t process_allocate_page(process_t *proc, uint32_t address) {
    //assert(process->page_tables)
    assert((uint32_t)proc, "Process is null");
@@ -155,7 +155,22 @@ static cr3_t proc_allocate_pagedir(process_t *proc) {
         return cr3;
 }
 
-void process_init(process_t *proc, char *stack, uint32_t eip, uint32_t kernel) {
+char *message = "hello from user\n";
+__attribute__((aligned(4096)))
+static void test_user() {
+    asm volatile("mov %0, %%eax"::"m"(message));
+    asm volatile("int $0x80");
+    while (1)
+    {
+    }
+}
+
+
+void process_init(process_t *proc, uint32_t eip, uint32_t kernel) {
+    uint32_t stack = page_alloc_kernel_contigious(4096, 1);
+    assert(stack, "Failed to alloc new stack");
+    stack += 4095;
+
     cpu_context_t context;
 
     proc->page_tables = 0;
@@ -182,23 +197,27 @@ void process_init(process_t *proc, char *stack, uint32_t eip, uint32_t kernel) {
         code = (segment_selector_t){.index = 3, .requested_privilege_level = 3, .table_indicator = 0};
         data = (segment_selector_t){.index = 4, .requested_privilege_level = 3, .table_indicator = 0};
 
-        char *code_page = process_allocate_page_handle(proc, 4096);
-
-        char *old_code = (char *)eip;
-        for(int i =0; i < 4096; i++) {
-            code_page[i] = 0;
+        uint8_t *code_page = process_allocate_page_handle(proc, 4096);
+        uint8_t *old_code = (uint8_t *)test_user;
+        //vga_printf("----------------- %x\n", test_user);
+        for(int i = 0; i < 4096; i++) {
+            code_page[i] = old_code[i];
         }
-        code_page[0] = 0xeb;
-        code_page[1] = 0xfe;
+        //code_page[0] = 0x55;
+        //code_page[1] = 0x89;
+        //code_page[2] = 0xe5;
+        //code_page[0] = 0xeb;
+        //code_page[1] = 0xfe;
         eip = (uint32_t)4096;
 
         page_free(code_page, 0);
 
         uint32_t user_stack = process_allocate_page(proc, 8192);
         assert(user_stack, "failed to alloc user stack");
+
         context.esp = 0;
         context.ebp = 0;
-        context.user_esp = user_stack;
+        context.user_esp = 8192 + 4095;
         context.user_ss.selector = (segment_selector_t){
             .index = 4,
             .requested_privilege_level = 3,

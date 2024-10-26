@@ -7,6 +7,7 @@
 #include "mem.h"
 #include "mutex.h"
 #include "sched.h"
+#include "process.h"
 
 extern char __kernel_higher_half_start;
 extern char __kernel_higher_half_stop;
@@ -32,9 +33,9 @@ uint32_t gpe_handler(cpu_context_t *context) {
 
 static void print_pte(page_table_entry_t *pde) {
     vga_printf("___________________________PTE\n");
-    vga_printf("R/W: %b, SUPER: %b, PRESENT: %b, PAGE BASE, %x\n", 
-    pde->read_write, pde->user, pde->present, pte_get_page_base_address(pde));
-    vga_printf("___________________________PTE\n");
+    vga_printf("R/W: %b, SUPER: %b, PRESENT: %b, PAGE BASE: %x, ISNULL: %u\n", 
+    pde->read_write, pde->user, pde->present, pte_get_page_base_address(pde), pte_is_null(pde));
+    vga_printf("___________________________END_PTE\n");
 } 
 
 static void print_pde(process_t *proc, page_directory_entry_4k_t *pde) {
@@ -44,9 +45,9 @@ static void print_pde(process_t *proc, page_directory_entry_4k_t *pde) {
 
     uint32_t page_table = pde4k_get_page_table_base_address(pde);
     vga_printf("___________________________PDE\n");
-    vga_printf("R/W: %b, SUPER: %b, PRESENT: %b, PT BASE, %x\n", 
-    pde->read_write, pde->user, pde->present, page_table);
-    vga_printf("___________________________PDE\n");
+    vga_printf("R/W: %b, SUPER: %b, PRESENT: %b, PT BASE: %x, ISNULL: %u\n", 
+    pde->read_write, pde->user, pde->present, page_table, pde_is_null(pde));
+    vga_printf("___________________________END_PDE\n");
 
     if(page_table){
         pagelist_t *pl = pagelist_search_page(proc->page_tables, page_table);

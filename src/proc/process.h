@@ -14,5 +14,6 @@ struct process_t{
     pagelist_t *pages;
 };
 
+void process_init(process_t *proc, uint32_t eip, uint32_t kernel);
 uint32_t process_allocate_page(process_t *proc, uint32_t address);
 uint32_t process_allocate_page_handle(process_t *proc, uint32_t address);

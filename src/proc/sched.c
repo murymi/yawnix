@@ -12,11 +12,9 @@ process_t *current_process = 0;
 uint32_t first_round = 1;
 
 static uint32_t timer_handler(cpu_context_t *context) {
-    //vga_printf("====== Enter ======\n");
     if(first_round) {
         first_round = 0;
         current_process = &parent_process;
-    //vga_printf("====== Exit ======\n");
         return (uint32_t) current_process->stack_ptr;
     }
 
@@ -28,12 +26,8 @@ static uint32_t timer_handler(cpu_context_t *context) {
 
     if(!current_process->kernel) {
         tss_set_stack0(current_process->kernel_stack);
-
         cpu_context_t *ctx = (cpu_context_t *)current_process->stack_ptr;
-        vga_printf("esp: %x\n", ctx->user_esp);
     }
-
-    //vga_printf("====== Exit ======\n");
     return (uint32_t) current_process->stack_ptr;
 }
 
@@ -46,13 +40,15 @@ static void parent_sleep() {
     
 }
 
+
 process_t *shed_get_current_proc() {
     return current_process;
 }
 
-void sched_init(uint32_t stack_ptr) {
+void sched_init() {
+
     interrupt_handler_register(32, timer_handler);
-    process_init(&parent_process, stack_ptr, parent_sleep, 1);
+    process_init(&parent_process, parent_sleep, 1);
     current_process = &parent_process;
 }
 

@@ -457,7 +457,7 @@ void interrupts_init_isrs() {
     interrupt_desc_table[126] = interrupt_gate_init((uint32_t)stub_126, selector, 0);
     interrupt_desc_table[127] = interrupt_gate_init((uint32_t)stub_127, selector, 0);
 
-    interrupt_desc_table[128] = interrupt_gate_init((uint32_t)stub_128, selector_user, 0);
+    interrupt_desc_table[128] = interrupt_gate_init((uint32_t)stub_128, selector_user, 3);
 
     interrupt_desc_table[129] = interrupt_gate_init((uint32_t)stub_129, selector, 0);
     interrupt_desc_table[130] = interrupt_gate_init((uint32_t)stub_130, selector, 0);
