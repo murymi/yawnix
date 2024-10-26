@@ -1,6 +1,6 @@
 #include "vga.h"
-#include "../i386.h"
-#include "../strings.h"
+#include "i386.h"
+#include "strings.h"
 
 #include<stdarg.h>
 #include<string.h>
@@ -163,6 +163,8 @@ void vga_write(char *buf, unsigned int len) {
 ///`%s` char *
 ///
 ///`%c` character
+///
+/// `%b` bit
 /// @param fmt 
 /// @param  
 void vga_printf(char *fmt, ...) {
@@ -215,6 +217,16 @@ void vga_vprintf(char *fmt, __gnuc_va_list args) {
             case 'c':
                 char cnumber = (char)va_arg(args, int);
                 vga_write_char(cnumber);
+                i += 1;
+                /* code */
+                break;
+            case 'b':
+                char bnumber = (char)va_arg(args, int);
+                if(bnumber) {
+                    vga_write_char('1');
+                } else {
+                    vga_write_char('0');
+                }
                 i += 1;
                 /* code */
                 break;

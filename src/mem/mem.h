@@ -14,3 +14,4 @@ uint32_t physical_alloc_block();
 void physical_free_block(uint32_t block_ptr);
 uint32_t physical_alloc_block_specific(uint32_t block_ptr);
 mem_stats_t mem_stats();
+int block_is_not_free(uint32_t block_ptr);

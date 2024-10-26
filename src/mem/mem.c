@@ -73,6 +73,15 @@ uint32_t physical_alloc_block_specific(uint32_t block_ptr) {
     return 0;
 }
 
+int block_is_not_free(uint32_t block_ptr) {
+    mutex_lock(&phys_mutex);
+    assert((block_ptr % BLOCK_SIZE) == 0, "unaligned block");
+    uint32_t block_index = block_ptr/BLOCK_SIZE;
+    int res =  bitset_isset(bitset, block_index);
+    mutex_unlock(&phys_mutex);
+    return res;
+}
+
 void physical_free_block(uint32_t block_ptr) {
     mutex_lock(&phys_mutex);
     assert((block_ptr % BLOCK_SIZE) == 0, "attempt to free unaligned block");

@@ -6,6 +6,7 @@
 #include "bitset.h"
 #include "mem.h"
 #include "mutex.h"
+#include "sched.h"
 
 extern char __kernel_higher_half_start;
 extern char __kernel_higher_half_stop;
@@ -16,12 +17,63 @@ uint32_t virtual_bitset[MAX_PAGES/32];
 mutex_t virtual_mutex;
 
 uint32_t gpe_handler(cpu_context_t *context) {
-    panic("general protection violation\n");
+    error_code_t code = *((error_code_t *)&context->error_code);
+
+    panic("general protection violation\nTABLE %u [%u]\nDESC LOCATION: %u\nEXTERNAL: %u\n",
+    code.table_indexed,
+    code.index,
+    code.descriptor_location,
+    code.reserved
+    );
     return 0;
 }
 
+
+
+static void print_pte(page_table_entry_t *pde) {
+    vga_printf("___________________________PTE\n");
+    vga_printf("R/W: %b, SUPER: %b, PRESENT: %b, PAGE BASE, %x\n", 
+    pde->read_write, pde->user, pde->present, pte_get_page_base_address(pde));
+    vga_printf("___________________________PTE\n");
+} 
+
+static void print_pde(process_t *proc, page_directory_entry_4k_t *pde) {
+    uint32_t addr = read_cr2();
+    linear_address_4k_t lad = *((linear_address_4k_t *)&addr);
+
+
+    uint32_t page_table = pde4k_get_page_table_base_address(pde);
+    vga_printf("___________________________PDE\n");
+    vga_printf("R/W: %b, SUPER: %b, PRESENT: %b, PT BASE, %x\n", 
+    pde->read_write, pde->user, pde->present, page_table);
+    vga_printf("___________________________PDE\n");
+
+    if(page_table){
+        pagelist_t *pl = pagelist_search_page(proc->page_tables, page_table);
+        page_table_entry_t *page_table_virt = (page_table_entry_t *)pl->page;
+        vga_printf("FAULT PT: %x\n", page_table_virt);
+        print_pte(&page_table_virt[lad.page_table_entry]);
+    }
+} 
+
 uint32_t page_fault_handler(cpu_context_t *context) {
-    panic("page fault occurred\n");
+    page_fault_error_code_t code = *((page_fault_error_code_t *)&context->error_code);
+    cr3_t cr3 = read_cr3();
+
+    //code.p
+
+    uint32_t addr = read_cr2();
+    linear_address_4k_t lad = *((linear_address_4k_t *)&addr);
+
+    process_t *current = shed_get_current_proc();
+
+    print_pde(current, &current->page_directory[lad.page_directory_entry]);
+    //print_pde(&current->page_directory)
+    panic("---PAGE FAULT---\n ADDRESS: %x\n FROM USER: %u\n BY WRITE: %u\nBY VIOLATION: %b\n CR3: %x\nPD: %x\n",
+     addr, code.from_user_mode, code.caused_by_write,code.p, cr3_get_page_directory_base(&cr3),
+     current->page_directory
+     );
+
     return 0;
 }
 
@@ -31,12 +83,16 @@ page_directory_entry_4k_t page_directory[1024];
 __attribute__((aligned(4096)))
 page_table_entry_t page_table[1024][1024];
 
+uint32_t paging_kernel_page_dir(){
+    return (uint32_t)page_directory;
+}
+
 
 static void clear_page_drectory(){
     for(int i = 0; i < 1024; i++) {
         page_directory[i] = pde4k_zero();
         page_directory[i].present = 1;
-        page_directory[i].sepervisor = 1;
+        page_directory[i].user = 1;
         page_directory[i].read_write = 1;
         pde4k_set_page_table_base_address(&page_directory[i], ((uint32_t)&page_table[i]) - 0xC0000000);
         //vga_printf("woa: %x, woest: %x\n",
@@ -76,7 +132,7 @@ static void recover_page_tables() {
 
 }
 
-void map_kernel() {
+void paging_init() {
     clear_page_drectory();
     uint32_t kernel_base = align_backward((uint32_t)&__kernel_higher_half_start, BLOCK_SIZE);
     uint32_t kernel_top = align_forward((uint32_t) &__kernel_higher_half_stop, BLOCK_SIZE);
@@ -85,7 +141,7 @@ void map_kernel() {
         linear_address_4k_t lad = *((linear_address_4k_t *)&i);
         page_table_entry_t pte = pte_zero();
         pte.present = 1;
-        pte.sepervisor = 1;
+        pte.user = 1;
         pte.read_write = 1;
         pte_set_page_base_address(&pte, i - 0xC0000000);
         page_table[lad.page_directory_entry][lad.page_table_entry] = pte;
@@ -111,7 +167,7 @@ void map_kernel() {
         linear_address_4k_t lad = *((linear_address_4k_t *)&buf);
         page_table_entry_t pte = pte_zero();
         pte.present = 1;
-        pte.sepervisor = 1;
+        pte.user = 1;
         pte.read_write = 1;
         pte_set_page_base_address(&pte, 0xb8000);
         page_table[lad.page_directory_entry][lad.page_table_entry] = pte;
@@ -147,7 +203,7 @@ static uint32_t page_alloc_kernel_inner() {
     return 0;
 }
 
-uint32_t page_alloc_kernel_random() {
+uint32_t page_alloc_kernel_random(int kernel) {
     mutex_lock(&virtual_mutex);
     uint32_t physical_block = physical_alloc_block();
     assert(physical_block, "Physical memory alloc error");
@@ -158,7 +214,9 @@ uint32_t page_alloc_kernel_random() {
     linear_address_4k_t lad = *((linear_address_4k_t *)&virtual_block);
     page_table_entry_t pte = pte_zero();
     pte.present = 1;
-    pte.sepervisor = 1;
+    if(kernel) {
+        pte.user = 1;
+    }
     pte.read_write = 1;
     pte_set_page_base_address(&pte, physical_block);
     page_table[lad.page_directory_entry][lad.page_table_entry] = pte;
@@ -170,26 +228,45 @@ uint32_t page_alloc_kernel_random() {
 /// @brief physical block must be unallocated
 /// @param physical_block 
 /// @return 
-uint32_t page_alloc_kernel_specific_physical(uint32_t physical_block) {
+uint32_t page_alloc_kernel_specific_physical(uint32_t physical_block, int kernel, int alloc_phys) {
     mutex_lock(&virtual_mutex);
     assert((physical_block%BLOCK_SIZE) == 0, "physical block must be aligned");
     assert(physical_block, "Physical block must be unNULL");
 
-    uint32_t physical_block2 = physical_alloc_block_specific(physical_block);
-    assert(physical_block2 == physical_block, "blocks should be same");
+    if(alloc_phys) {
+        uint32_t physical_block2 = physical_alloc_block_specific(physical_block);
+        if(block_is_not_free(physical_block)) {
+            assert(physical_block2 == physical_block, "failed to allocate block (not free)");
+        }
+        assert(physical_block2 == physical_block, "blocks should be same");
+    }
+
     uint32_t virtual_block = page_alloc_kernel_inner();
     assert(virtual_block, "virtual memory alloc error");
 
     linear_address_4k_t lad = *((linear_address_4k_t *)&virtual_block);
     page_table_entry_t pte = pte_zero();
     pte.present = 1;
-    pte.sepervisor = 1;
+    if(kernel) {
+        pte.user = 1;
+    }
     pte.read_write = 1;
     pte_set_page_base_address(&pte, physical_block);
     page_table[lad.page_directory_entry][lad.page_table_entry] = pte;
-    assert(pte_get_page_base_address(&pte) == physical_block2, "base must be eq to physical");
+    assert(pte_get_page_base_address(&pte) == physical_block, "base must be eq to physical");
     mutex_unlock(&virtual_mutex);
     return virtual_block;
+}
+
+uint32_t page_kernel_virtual_t0_pyhsical(uint32_t page_ptr) {
+    assert((page_ptr%BLOCK_SIZE) == 0, "page block must be aligned");
+    assert(page_ptr, "page block must be unNULL");
+    uint32_t block_idx = page_ptr/BLOCK_SIZE;
+    assert(bitset_isset(virtual_bitset, block_idx), "attempt to get physical of unmapped\n");
+    linear_address_4k_t lad = *((linear_address_4k_t *)&page_ptr);
+    page_table_entry_t entry = page_table[lad.page_directory_entry][lad.page_table_entry];
+    assert(*((uint32_t *)&entry), "PTE must be unNULL");
+    return pte_get_page_base_address(&entry);
 }
 
 void page_free(uint32_t page_ptr, int free_physical) {
@@ -217,7 +294,7 @@ void page_free(uint32_t page_ptr, int free_physical) {
 }
 
 
-uint32_t page_alloc_kernel_specific_virtual(uint32_t virtual_block, int lock) {
+uint32_t page_alloc_kernel_specific_virtual(uint32_t virtual_block, int lock, int kernel) {
     if(lock) mutex_lock(&virtual_mutex);
     uint32_t physical_block = physical_alloc_block();
     assert(physical_block, "Physical memory alloc error");
@@ -230,7 +307,9 @@ uint32_t page_alloc_kernel_specific_virtual(uint32_t virtual_block, int lock) {
     linear_address_4k_t lad = *((linear_address_4k_t *)&virtual_block);
     page_table_entry_t pte = pte_zero();
     pte.present = 1;
-    pte.sepervisor = 1;
+    if(kernel) {
+        pte.user = 1;
+    }
     pte.read_write = 1;
     pte_set_page_base_address(&pte, physical_block);
     page_table[lad.page_directory_entry][lad.page_table_entry] = pte;
@@ -240,7 +319,7 @@ uint32_t page_alloc_kernel_specific_virtual(uint32_t virtual_block, int lock) {
     return virtual_block;
 }
 
-uint32_t page_alloc_kernel_contigious(uint32_t size) {
+uint32_t page_alloc_kernel_contigious(uint32_t size, int kernel) {
     assert(size > 0, "page allocation size must be > zero");
     mutex_lock(&virtual_mutex);
     uint32_t aligned_size  = align_forward(size, BLOCK_SIZE);
@@ -269,7 +348,7 @@ uint32_t page_alloc_kernel_contigious(uint32_t size) {
     }
 
     for(uint32_t i = 0; i < npages; i++) {
-        page_alloc_kernel_specific_virtual((first_page + i) * BLOCK_SIZE, 0);
+        page_alloc_kernel_specific_virtual((first_page + i) * BLOCK_SIZE, 0, 1);
     }
 
     for(uint32_t i = 0; i < npages; i++) {
@@ -277,4 +356,10 @@ uint32_t page_alloc_kernel_contigious(uint32_t size) {
     }
     mutex_unlock(&virtual_mutex);
     return first_page * BLOCK_SIZE;
+}
+
+void zero_page_table(uint32_t *page) {
+    for(int i = 0; i < 1024; i++) {
+        page[i] = 0;
+    }
 }

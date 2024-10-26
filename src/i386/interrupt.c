@@ -325,6 +325,8 @@ unsigned int interrupt_handler(cpu_context_t *context) {
 
 void interrupts_init_isrs() {
     segment_selector_t selector = (segment_selector_t){ .index = 1, .requested_privilege_level = 0, .table_indicator = 0 };
+    segment_selector_t selector_user = (segment_selector_t){ .index = 1, .requested_privilege_level = 3, .table_indicator = 0 };
+
 
     interrupt_desc_table[0] = interrupt_gate_init((uint32_t)stub_0, selector, 0);
     interrupt_desc_table[1] = interrupt_gate_init((uint32_t)stub_1, selector, 0);
@@ -454,7 +456,9 @@ void interrupts_init_isrs() {
     interrupt_desc_table[125] = interrupt_gate_init((uint32_t)stub_125, selector, 0);
     interrupt_desc_table[126] = interrupt_gate_init((uint32_t)stub_126, selector, 0);
     interrupt_desc_table[127] = interrupt_gate_init((uint32_t)stub_127, selector, 0);
-    interrupt_desc_table[128] = interrupt_gate_init((uint32_t)stub_128, selector, 0);
+
+    interrupt_desc_table[128] = interrupt_gate_init((uint32_t)stub_128, selector_user, 0);
+
     interrupt_desc_table[129] = interrupt_gate_init((uint32_t)stub_129, selector, 0);
     interrupt_desc_table[130] = interrupt_gate_init((uint32_t)stub_130, selector, 0);
     interrupt_desc_table[131] = interrupt_gate_init((uint32_t)stub_131, selector, 0);

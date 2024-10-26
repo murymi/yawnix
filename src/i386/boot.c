@@ -6,7 +6,6 @@
 
 #include "i386.h"
 #include "mboot.h"
-#include "main.c"
 #include "vga.h"
 #include <string.h>
 #include <string.h>
@@ -22,6 +21,7 @@
 #include "heap.h"
 #include "mutex.h"
 #include "sched.h"
+#include "process.h"
 //#include <math.h>
 
 __attribute__((section(".rodata.multiboot")))
@@ -88,14 +88,14 @@ __attribute__((section(".boot.text"))) void enable_boot_paging()
 
         page_directory_entry_4m_t page = pde4m_boot_zero();
         page.is_page = 1;
-        page.sepervisor = 1;
+        page.user = 0;
         page.present = 1;
         page.read_write = 1;
 
 
         page_directory_entry_4m_t identity = pde4m_boot_zero();
         identity.is_page = 1;
-        identity.sepervisor = 1;
+        identity.user = 0;
         identity.present = 1;
         identity.read_write = 1;
 
@@ -152,10 +152,10 @@ __attribute__((naked)) void higher_half()
 }
 
 static void fun_entry() {
-    vga_printf("I am process 2\n");
+    //vga_printf("I am process 2\n");
     while (1)
     {
-        asm volatile("hlt");
+        //asm volatile("hlt");
     }
     
 }
@@ -175,7 +175,7 @@ void main()
 
     physical_mem_init(total_memory);
 
-    map_kernel();
+    paging_init();
 
     vga_clear_screen(black);
 
@@ -188,15 +188,15 @@ void main()
 
     enable_interrupts();
 
-    char *new_stack = page_alloc_kernel_contigious(4096 * 4);
+    char *new_stack = page_alloc_kernel_contigious(4096 * 4, 1);
     assert(new_stack, "Failed to alloc new stack");
 
     sched_init(new_stack + (4096 * 4));
     
     process_t proc2;
-    char *proc2_stack = page_alloc_kernel_random();
+    char *proc2_stack = page_alloc_kernel_random(1);
     assert(new_stack, "Failed to alloc new stack");
-    process_init(&proc2, proc2_stack + 4096, (uint32_t)fun_entry);
+    process_init(&proc2, proc2_stack + 4096, (uint32_t)fun_entry,0);
     sched_append_process(&proc2);
 
     pic_clear_mask(0);

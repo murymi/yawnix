@@ -254,6 +254,17 @@ static inline void write_cr0(cr0_t new)
         : : "r"(new));
 }
 
+
+static inline uint32_t read_cr2()
+{
+    uint32_t result;
+    asm volatile(
+        "mov %%cr2, %0"
+        : "=r"(result));
+    return result;
+}
+
+
 /// CR4 — Contains a group of flags that enable several architectural extensions, and indicate
 /// operating system or executive support for specific processor capabilities. The control
 /// registers can be read and loaded (or modified) using the move-to-or-from-control-registers
@@ -445,7 +456,7 @@ typedef struct
     /// the page is assigned the user privilege level. This flag interacts with the R/W
     /// flag and the WP flag in register CR0. See Section 4.11, “Page-Level Protec-
     /// tion”, and Table 4-3 for a detail discussion of the use of these flags.
-    int sepervisor : 1;
+    int user : 1;
     /// **Page-level write-through (PWT) flag, bit 3**
     /// Controls the write-through or write-back caching policy of individual pages or
     /// page tables. When the PWT flag is set, write-through caching is enabled for the
@@ -575,7 +586,7 @@ typedef struct
     /// the page is assigned the user privilege level. This flag interacts with the R/W
     /// flag and the WP flag in register CR0. See Section 4.11, “Page-Level Protec-
     /// tion”, and Table 4-3 for a detail discussion of the use of these flags.
-    int sepervisor : 1;
+    int user : 1;
     /// **Page-level write-through (PWT) flag, bit 3**
     /// Controls the write-through or write-back caching policy of individual pages or
     /// page tables. When the PWT flag is set, write-through caching is enabled for the
@@ -772,7 +783,7 @@ typedef struct
     /// the page is assigned the user privilege level. This flag interacts with the R/W
     /// flag and the WP flag in register CR0. See Section 4.11, “Page-Level Protec-
     /// tion”, and Table 4-3 for a detail discussion of the use of these flags.
-    unsigned int sepervisor : 1;
+    unsigned int user : 1;
     /// **Page-level write-through (PWT) flag, bit 3**
     /// Controls the write-through or write-back caching policy of individual pages or
     /// page tables. When the PWT flag is set, write-through caching is enabled for the
@@ -1712,7 +1723,10 @@ typedef struct
     // Destination, source, base pointer
     uint32_t edi;
     uint32_t esi;
+
     uint32_t ebp;
+    
+    // not used in ctx thou
     uint32_t esp;
 
     // General registers
@@ -1726,14 +1740,14 @@ typedef struct
 
     // defined
     uint32_t error_code;
-    // if (std.mem.eql(u8, "#PF", interrupt.mnemonic)) PageFaultErrorCode else ErrorCode,
+
     uint32_t eip;
     pushed_selector_t cs;
     // cs_high: u16,
     eflags_t eflags;
     // if privilege changes
     uint32_t user_esp;
-    uint32_t user_ss;
+    pushed_selector_t user_ss;
 } cpu_context_t;
 
 static inline void invalidate_page(uint32_t page_ptr) {
@@ -1757,3 +1771,54 @@ static inline int compare_and_swap(uint32_t *ass, uint32_t expected, uint32_t ne
     return expected;
 }
 
+typedef struct{
+    /// The P flag indicates whether the exception was due to a not-present page (0) or to
+    /// either an access rights violation or the use of a reserved bit (1).
+    uint32_t p: 1;
+    /// The W/R flag indicates whether the memory access that caused the exception was a
+    /// read (0) or write (1).
+    uint32_t caused_by_write: 1;
+    /// The U/S flag indicates whether the processor was executing at user mode (1) or
+    /// supervisor mode (0) at the time of the exception.
+    uint32_t from_user_mode:1;
+    /// The RSVD flag indicates that the processor detected 1s in reserved bits of the page
+    /// directory, when the PSE or PAE flags in control register CR4 are set to 1. (The PSE
+    /// flag is only available in the Pentium 4, Intel Xeon, P6 family, and Pentium processors,
+    /// and the PAE flag is only available on the Pentium 4, Intel Xeon, and P6 family
+    /// processors. In earlier IA-32 processor, the bit position of the RSVD flag is reserved.)
+    uint32_t rsvd: 1;
+    /// The I/D flag indicates whether the exception was caused by an instruction fetch. This
+    /// flag is reserved if the processor does not support execute-disable bit or execute disable
+    /// bit feature is not enabled (see Section 3.10).
+    uint32_t by_instruction_fetch:1;
+    uint32_t resrved: 27;
+} 
+__attribute__((packed))
+__attribute__((aligned(4)))
+page_fault_error_code_t;
+
+
+/// When an exception condition is related to a specific segment, the processor pushes an error code
+/// onto the stack of the exception handler (whether it is a procedure or task). The error code has
+/// the format shown in Figure 5-6. The error code resembles a segment selector; however, instead
+/// of a TI flag and RPL field, the error code contains 3 flags:
+typedef struct{
+    /// **EXT - External event (bit 0)** — When set, indicates that an event external to the
+    /// program, such as a hardware interrupt, caused the exception.
+    uint32_t external_event: 1;
+    /// **IDT - Descriptor location (bit 1)** — When set, indicates that the index portion of the
+    /// error code refers to a gate descriptor in the IDT; when clear, indicates that the
+    /// index refers to a descriptor in the GDT or the current LDT.
+    uint32_t descriptor_location: 1;
+    /// **TI - GDT/LDT (bit 2)** — Only used when the IDT flag is clear. When set, the TI
+    /// flag indicates that the index portion of the error code refers to a segment or gate
+    /// descriptor in the LDT; when clear, it indicates that the index refers to a
+    /// descriptor in the current GDT.
+    uint32_t table_indexed: 1;
+
+    uint32_t index: 13;
+    uint32_t reserved: 16;
+} 
+__attribute__((packed))
+__attribute__((aligned(4)))
+error_code_t;

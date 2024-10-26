@@ -6,6 +6,10 @@
 segment_descriptor_t gdt_entries[6];
 task_state_segment_t tss;
 
+void tss_set_stack0(uint32_t stack) {
+    tss.esp0 = stack;
+}
+
 void gdt_init(uint32_t kstack_top) {
 
     gdt_entries[0] = segment_descriptor_zero();
@@ -126,7 +130,7 @@ void gdt_init(uint32_t kstack_top) {
 
 
     tss.ss0 = (segment_selector_t){.index = 2, .requested_privilege_level = 0, .table_indicator = 0};
-    tss.esp0 = kstack_top;
+    //tss.esp0 = kstack_top;
     tss.cs = (segment_selector_t){.index = 1, .requested_privilege_level = 3, .table_indicator = 0};
     tss.ds = tss.ss = tss.es = tss.fs = tss.gs = (segment_selector_t){.index = 2, .requested_privilege_level = 3, .table_indicator = 0};
 

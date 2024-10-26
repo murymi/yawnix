@@ -9,7 +9,7 @@ mutex_t heap_mutex;
 void heap_init()
 {
     heap = 0;
-    heap = (heap_t *)page_alloc_kernel_contigious(HEAP_SIZE);
+    heap = (heap_t *)page_alloc_kernel_contigious(HEAP_SIZE, 1);
     assert((uint32_t)heap > 0, "heap init failed");
     heap->block_count = 0;
 
