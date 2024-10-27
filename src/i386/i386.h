@@ -440,7 +440,7 @@ typedef struct
     /// how to invalidate them).
     /// - 4. Return from the page-fault handler to restart the interrupted program (or
     /// task).
-    int present : 1;
+    unsigned int present : 1;
     /// **Read/write (R/W) flag, bit 1**
     /// Specifies the read-write privileges for a page or group of pages (in the case of
     /// a page-directory entry that points to a page table). When this flag is clear, the
@@ -448,7 +448,7 @@ typedef struct
     /// This flag interacts with the U/S flag and the WP flag in register CR0. See
     /// Section 4.11, “Page-Level Protection”, and Table 4-3 for a detailed discussion
     /// of the use of these flags.
-    int read_write : 1;
+    uint32_t read_write : 1;
     /// **User/supervisor (U/S) flag, bit 2**
     /// Specifies the user-supervisor privileges for a page or group of pages (in the
     /// case of a page-directory entry that points to a page table). When this flag is
@@ -456,7 +456,7 @@ typedef struct
     /// the page is assigned the user privilege level. This flag interacts with the R/W
     /// flag and the WP flag in register CR0. See Section 4.11, “Page-Level Protec-
     /// tion”, and Table 4-3 for a detail discussion of the use of these flags.
-    int user : 1;
+    uint32_t user : 1;
     /// **Page-level write-through (PWT) flag, bit 3**
     /// Controls the write-through or write-back caching policy of individual pages or
     /// page tables. When the PWT flag is set, write-through caching is enabled for the
@@ -465,7 +465,7 @@ typedef struct
     /// the CD (cache disable) flag in CR0 is set. See Section 10.5, “Cache Control”,
     /// for more information about the use of this flag. See Section 2.5, “Control
     /// Registers”, for a description of a companion PWT flag in control register CR3.
-    int page_level_write_through : 1;
+    uint32_t page_level_write_through : 1;
     /// **Page-level cache disable (PCD) flag, bit 4**
     /// Controls the caching of individual pages or page tables. When the PCD flag is
     /// set, caching of the associated page or page table is prevented; when the flag is
@@ -476,7 +476,7 @@ typedef struct
     /// Memory Cache Control, for more information about the use of this flag. See
     /// Section 2.5, “Control Registers”, for a description of a companion PCD flag in
     /// control register CR3.
-    int page_level_cache_disable : 1;
+    uint32_t page_level_cache_disable : 1;
     /// **Accessed (A) flag, bit 5**
     /// Indicates whether a page or page table has been accessed (read from or written
     /// to) when set. Memory management software typically clears this flag when a
@@ -493,9 +493,9 @@ typedef struct
     /// processor is executing code from the same memory area that is being used for
     /// page table structures, the setting of the bit may or may not result in an imme-
     /// diate change to the executing code stream.
-    int accessed : 1;
+    uint32_t accessed : 1;
     /// **bit 6**
-    int reserved : 1;
+    uint32_t reserved : 1;
     /// **Page size (PS) flag, bit 7 page-directory entries for 4-KByte pages**
     /// Determines the page size. When this flag is clear, the page size is 4 KBytes and
     /// the page-directory entry points to a page table. When the flag is set, the page
@@ -503,7 +503,7 @@ typedef struct
     /// ical addressing is enabled) and the page-directory entry points to a page. If the
     /// page-directory entry points to a page table, all the pages associated with that
     /// page table will be 4-KByte pages.
-    int is_page : 1;
+    uint32_t is_page : 1;
     /// **Global (G) flag, bit 8**
     /// (Introduced in the Pentium Pro processor) — Indicates a global page when set.
     /// When a page is marked global and the page global enable (PGE) flag in register
@@ -516,15 +516,15 @@ typedef struct
     /// in the page-table entries. See Section 3.12, “Translation Lookaside Buffers
     /// (TLBs)”, for more information about the use of this flag. (This bit is reserved
     /// in Pentium and earlier IA-32 processors.)
-    int global : 1;
+    uint32_t global : 1;
 
-    int available_bits : 3;
+    uint32_t available_bits : 3;
 
     /// (Page-directory entries for 4-KByte page tables) — Specifies the physical
     /// address of the first byte of a page table. The bits in this field are interpreted as
     /// the 20 most-significant bits of the physical address, which forces page tables to
     /// be aligned on 4-KByte boundaries.
-    int page_table_base_address : 20;
+    uint32_t page_table_base_address : 20;
 } __attribute__((packed))
 __attribute__((aligned(4)))
 page_directory_entry_4k_t;
@@ -570,7 +570,7 @@ typedef struct
     /// how to invalidate them).
     /// - 4. Return from the page-fault handler to restart the interrupted program (or
     /// task).
-    int present : 1;
+    unsigned int present : 1;
     /// **Read/write (R/W) flag, bit 1**
     /// Specifies the read-write privileges for a page or group of pages (in the case of
     /// a page-directory entry that points to a page table). When this flag is clear, the
@@ -578,7 +578,7 @@ typedef struct
     /// This flag interacts with the U/S flag and the WP flag in register CR0. See
     /// Section 4.11, “Page-Level Protection”, and Table 4-3 for a detailed discussion
     /// of the use of these flags.
-    int read_write : 1;
+    unsigned int read_write : 1;
     /// **User/supervisor (U/S) flag, bit 2**
     /// Specifies the user-supervisor privileges for a page or group of pages (in the
     /// case of a page-directory entry that points to a page table). When this flag is
@@ -586,7 +586,7 @@ typedef struct
     /// the page is assigned the user privilege level. This flag interacts with the R/W
     /// flag and the WP flag in register CR0. See Section 4.11, “Page-Level Protec-
     /// tion”, and Table 4-3 for a detail discussion of the use of these flags.
-    int user : 1;
+    unsigned int user : 1;
     /// **Page-level write-through (PWT) flag, bit 3**
     /// Controls the write-through or write-back caching policy of individual pages or
     /// page tables. When the PWT flag is set, write-through caching is enabled for the
@@ -595,7 +595,7 @@ typedef struct
     /// the CD (cache disable) flag in CR0 is set. See Section 10.5, “Cache Control”,
     /// for more information about the use of this flag. See Section 2.5, “Control
     /// Registers”, for a description of a companion PWT flag in control register CR3.
-    int page_level_write_through : 1;
+    unsigned int page_level_write_through : 1;
     /// **Page-level cache disable (PCD) flag, bit 4**
     /// Controls the caching of individual pages or page tables. When the PCD flag is
     /// set, caching of the associated page or page table is prevented; when the flag is
@@ -606,7 +606,7 @@ typedef struct
     /// Memory Cache Control, for more information about the use of this flag. See
     /// Section 2.5, “Control Registers”, for a description of a companion PCD flag in
     /// control register CR3.
-    int page_level_cache_disable : 1;
+    unsigned int page_level_cache_disable : 1;
     /// **Accessed (A) flag, bit 5**
     /// Indicates whether a page or page table has been accessed (read from or written
     /// to) when set. Memory management software typically clears this flag when a
@@ -623,7 +623,7 @@ typedef struct
     /// processor is executing code from the same memory area that is being used for
     /// page table structures, the setting of the bit may or may not result in an imme-
     /// diate change to the executing code stream.
-    int accsessed : 1;
+    unsigned int accsessed : 1;
 
     /// **Dirty (D) flag, bit 6**
     /// Indicates whether a page has been written to when set. (This flag is not used in
@@ -642,7 +642,7 @@ typedef struct
     /// processor is executing code from the same memory area that is being used for
     /// page table structures, the setting of the bit may or may not result in an imme-
     /// diate change to the executing code stream.
-    int dirty : 1;
+    unsigned int dirty : 1;
 
     /// **Page size (PS) flag, bit 7 page-directory entries for 4-KByte pages**
     /// Determines the page size. When this flag is clear, the page size is 4 KBytes and
@@ -651,7 +651,7 @@ typedef struct
     /// ical addressing is enabled) and the page-directory entry points to a page. If the
     /// page-directory entry points to a page table, all the pages associated with that
     /// page table will be 4-KByte pages.
-    int is_page : 1;
+    uint32_t is_page : 1;
     /// **Global (G) flag, bit 8**
     /// (Introduced in the Pentium Pro processor) — Indicates a global page when set.
     /// When a page is marked global and the page global enable (PGE) flag in register
@@ -664,7 +664,7 @@ typedef struct
     /// in the page-table entries. See Section 3.12, “Translation Lookaside Buffers
     /// (TLBs)”, for more information about the use of this flag. (This bit is reserved
     /// in Pentium and earlier IA-32 processors.)
-    int global : 1;
+    uint32_t global : 1;
     /// **Reserved and available-to-software bits**
     /// For all IA-32 processors. Bits 9, 10, and 11 are available for use by software.
     /// (When the present bit is clear, bits 1 through 31 are available to software, see
@@ -676,7 +676,7 @@ typedef struct
     /// through 21 are reserved and must be set to 0.
     /// For Pentium III and later processors. For a page-directory entry for a 4-MByte
     /// page, bits 13 through 21 are reserved and must be set to 0.
-    int available_bits : 3;
+    uint32_t available_bits : 3;
     /// **Page attribute table index (PAT) flag, bit 7 in page-table entries for 4-KByte pages and
     /// bit 12 in page-directory entries for 4-MByte pages**
     /// (Introduced in the Pentium III processor) — Selects PAT entry. For processors
@@ -685,16 +685,16 @@ typedef struct
     /// memory type for the page (see Section 10.12, “Page Attribute Table (PAT)”).
     /// For processors that do not support the PAT, this bit is reserved and should be
     /// set to 0.
-    int page_attribute_table_index : 1;
+    uint32_t page_attribute_table_index : 1;
 
-    int reserved : 9;
+    uint32_t reserved : 9;
     /// **(Page-directory entries for 4-MByte pages)** — Specifies the physical address
     /// of the first byte of a 4-MByte page. Only bits 22 through 31 of this field are
     /// used (and bits 12 through 21 are reserved and must be set to 0, for IA-32
     /// processors through the Pentium II processor). The base address bits are inter-
     /// preted as the 10 most-significant bits of the physical address, which forces
     /// 4-MByte pages to be aligned on 4-MByte boundaries.
-    int page_base_address : 10;
+    uint32_t page_base_address : 10;
 } __attribute__((packed))
 __attribute__((aligned(4)))
 page_directory_entry_4m_t;

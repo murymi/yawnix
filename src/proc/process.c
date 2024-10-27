@@ -1,5 +1,7 @@
 #include "process.h"
 #include "debug.h"
+#include "heap.h"
+#include "mem.h"
 
 static pagelist_t *pagelist_init(uint32_t page, uint32_t physical) {
     pagelist_t *pl = heap_alloc(sizeof(pagelist_t));
@@ -16,6 +18,20 @@ static void append_page_table(process_t *proc, uint32_t page, uint32_t physical)
         return;
     }
     pagelist_t *tmp = proc->page_tables;
+    while (tmp->next)
+    {
+        tmp = tmp->next;
+    }
+    tmp->next = pagelist_init(page, physical);
+}
+
+
+static void append_page(process_t *proc, uint32_t page, uint32_t physical) {
+    if(proc->pages == 0) {
+        proc->pages = pagelist_init(page, physical);
+        return;
+    }
+    pagelist_t *tmp = proc->pages;
     while (tmp->next)
     {
         tmp = tmp->next;
@@ -46,7 +62,7 @@ static uint32_t save_context(uint32_t *stack, cpu_context_t *context) {
 
     stack -= array_len;
 
-    uint32_t result = stack;
+    uint32_t result = (uint32_t)stack;
 
     for(uint32_t i = 0; i < (sizeof(cpu_context_t)/4); i++) {
         *stack = context_array[i];
@@ -105,14 +121,15 @@ uint32_t process_allocate_page(process_t *proc, uint32_t address) {
 
     assert(!tp->present, "page already mapped");
 
-    uint32_t *pblock = physical_alloc_block();
+    uint32_t pblock = physical_alloc_block();
     assert(pblock, "Failed to allocate pyhsical block");
 
     *tp = pte_zero();
     tp->present = 1;
     tp->user = 1;
     tp->read_write = 1;
-
+    
+    append_page(proc, address, pblock);
     pte_set_page_base_address(tp, pblock);
     return pblock;
 }
@@ -133,7 +150,7 @@ static cr3_t proc_allocate_pagedir(process_t *proc) {
 
         cr3_t cr3 = read_cr3();
         uint32_t kernel_offset = 0xC0000000;
-        linear_address_4k_t lad = *((linear_address_4k_t *)&kernel_offset);
+        //linear_address_4k_t lad = *((linear_address_4k_t *)&kernel_offset);
         page_directory_entry_4k_t *kernel_page_dir = (page_directory_entry_4k_t *)(cr3_get_page_directory_base(&cr3) + kernel_offset);
         //uint32_t count = 0;
 
@@ -197,7 +214,7 @@ void process_init(process_t *proc, uint32_t eip, uint32_t kernel) {
         code = (segment_selector_t){.index = 3, .requested_privilege_level = 3, .table_indicator = 0};
         data = (segment_selector_t){.index = 4, .requested_privilege_level = 3, .table_indicator = 0};
 
-        uint8_t *code_page = process_allocate_page_handle(proc, 4096);
+        uint8_t *code_page = (uint8_t *)process_allocate_page_handle(proc, 4096);
         uint8_t *old_code = (uint8_t *)test_user;
         //vga_printf("----------------- %x\n", test_user);
         for(int i = 0; i < 4096; i++) {
@@ -210,7 +227,7 @@ void process_init(process_t *proc, uint32_t eip, uint32_t kernel) {
         //code_page[1] = 0xfe;
         eip = (uint32_t)4096;
 
-        page_free(code_page, 0);
+        page_free((uint32_t) code_page, 0);
 
         uint32_t user_stack = process_allocate_page(proc, 8192);
         assert(user_stack, "failed to alloc user stack");
@@ -235,3 +252,8 @@ void process_init(process_t *proc, uint32_t eip, uint32_t kernel) {
     proc->stack_ptr = save_context((uint32_t *)stack, &context);
     proc->next = 0;
 }
+
+
+//void process_destroy(process_t *proc) {
+//    
+//}

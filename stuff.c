@@ -1,4 +1,4 @@
-#include "src/hashmap.h"
+
 #include <stdio.h>
 #include <stdint.h>
 #include <stdarg.h>
@@ -6,12 +6,10 @@
 #include <fcntl.h>
 #include <signal.h>
 
+extern void foo();
 
 int main(int argc, char const *argv[])
 {
-    HashMap hm;
-
-    hashmap_put(&hm, "hello", "world");
-
+    foo();
     return 0;
 }

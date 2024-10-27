@@ -10,7 +10,7 @@ void tss_set_stack0(uint32_t stack) {
     tss.esp0 = stack;
 }
 
-void gdt_init(uint32_t kstack_top) {
+void gdt_init() {
 
     gdt_entries[0] = segment_descriptor_zero();
 

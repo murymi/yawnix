@@ -26,7 +26,7 @@ static uint32_t timer_handler(cpu_context_t *context) {
 
     if(!current_process->kernel) {
         tss_set_stack0(current_process->kernel_stack);
-        cpu_context_t *ctx = (cpu_context_t *)current_process->stack_ptr;
+        //cpu_context_t *ctx = (cpu_context_t *)current_process->stack_ptr;
     }
     return (uint32_t) current_process->stack_ptr;
 }
@@ -48,7 +48,7 @@ process_t *shed_get_current_proc() {
 void sched_init() {
 
     interrupt_handler_register(32, timer_handler);
-    process_init(&parent_process, parent_sleep, 1);
+    process_init(&parent_process, (uint32_t)parent_sleep, 1);
     current_process = &parent_process;
 }
 

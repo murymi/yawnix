@@ -23,6 +23,7 @@
 #include "sched.h"
 #include "process.h"
 #include "syscall.h"
+#include "gdt.h"
 //#include <math.h>
 
 __attribute__((section(".rodata.multiboot")))
@@ -144,22 +145,14 @@ __attribute__((naked)) void higher_half()
         "movl %%esp, %%ebp\n" ::
             "r"(((unsigned int)kernel_stack) + sizeof(kernel_stack)));
 
-    asm(
-        "jmp main");
-    while (1)
-    {
-        /* code */
-    }
+    asm("jmp main");
+
+    asm volatile (
+        "1:\n"
+        "jmp 1b\n"
+    );
 }
 
-static void fun_entry() {
-    //vga_printf("I am process 2\n");
-    while (1)
-    {
-        //asm volatile("hlt");
-    }
-    
-}
 
 void main()
 {
@@ -181,8 +174,6 @@ void main()
 
     heap_init();
     
-    mem_stats_t stats = mem_stats();
-
     enable_interrupts();
     syscall_init();
 

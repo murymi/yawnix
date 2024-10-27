@@ -349,7 +349,7 @@ uint32_t page_alloc_kernel_contigious(uint32_t size, int kernel) {
     }
 
     for(uint32_t i = 0; i < npages; i++) {
-        page_alloc_kernel_specific_virtual((first_page + i) * BLOCK_SIZE, 0, 1);
+        page_alloc_kernel_specific_virtual((first_page + i) * BLOCK_SIZE, 0, kernel);
     }
 
     for(uint32_t i = 0; i < npages; i++) {

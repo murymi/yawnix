@@ -5,10 +5,9 @@ V_AT = @
 endif
 
 # Compiler settings
-CC = gcc
 CFLAGS = -Wall -Isrc/include -nostdlib \
 -ffreestanding -fno-stack-protector -fno-pic -fno-pie -static -fno-strict-aliasing \
--fno-builtin -fno-omit-frame-pointer -msoft-float -m32 -Wextra -Wall -T src/linker.ld -lc -lm
+-fno-builtin -fno-omit-frame-pointer -msoft-float -m32 -Wextra -Wall -Werror -T src/linker.ld -lc
 
 GRUB_CFG = menuentry \"yawnix\" {\
 	multiboot /boot/yawnix\

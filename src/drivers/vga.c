@@ -145,7 +145,7 @@ void vga_write_char(char c) {
 }
 
 void vga_write(char *buf, unsigned int len) {
-    vga_pos_t current_position = vga_get_cursor();
+    //vga_pos_t current_position = vga_get_cursor();
 
     for(unsigned int i = 0; i < len; i += 1) {
         vga_write_char(buf[i]);
@@ -215,7 +215,7 @@ void vga_vprintf(char *fmt, __gnuc_va_list args) {
                 /* code */
                 break;
             case 'c':
-                char cnumber = (unsigned char)va_arg(args, char);
+                char cnumber = (unsigned char)va_arg(args, int);
                 vga_write_char(cnumber);
                 i += 1;
                 /* code */
